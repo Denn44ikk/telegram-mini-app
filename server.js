@@ -3,12 +3,11 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
-const axios = require('axios'); // Подключили библиотеку для запросов
+const axios = require('axios');
 
 const app = express();
-const PORT = process.env.PORT || 4000; // Используем порт из .env или 4000
+const PORT = process.env.PORT || 4000;
 
-// Пути
 const publicPath = path.join(__dirname, 'public');
 const indexPath = path.join(publicPath, 'index.html');
 
@@ -22,69 +21,82 @@ app.use((req, res, next) => {
     next();
 });
 
-// === ГЛАВНЫЙ МАРШРУТ ГЕНЕРАЦИИ ===
+// === API ГЕНЕРАЦИИ (OpenRouter / Gemini) ===
 app.post('/api/generate', async (req, res) => {
     const { prompt } = req.body;
     console.log('📝 Получен промпт:', prompt);
 
     if (!process.env.OPENROUTER_API_KEY) {
-        console.error('❌ Ошибка: Не указан API ключ в .env');
-        return res.status(500).json({ error: 'Server API Key missing' });
+        return res.status(500).json({ error: 'Нет API ключа на сервере' });
     }
 
     try {
-        console.log('⏳ Отправляю запрос в OpenRouter...');
-        
-        // Формируем запрос к OpenRouter (формат OpenAI)
+        console.log('⏳ Отправляю запрос к Gemini через OpenRouter...');
+
+        // Используем эндпоинт chat/completions, как в твоей документации
         const response = await axios.post(
-            'https://openrouter.ai/api/v1/images/generations', 
+            'https://openrouter.ai/api/v1/chat/completions',
             {
-                // МОДЕЛЬ: Можешь поменять на 'black-forest-labs/flux-1-schnell' или другую
-                model: 'stabilityai/stable-diffusion-xl-base-1.0', 
-                prompt: prompt,
-                n: 1, // Количество картинок
-                size: "1024x1024",
-                response_format: "b64_json" // ВАЖНО: Просим вернуть Base64, а не ссылку
+                // Модель из твоего примера
+                model: 'google/gemini-2.0-flash-001', // ВНИМАНИЕ: gemini-3 может быть еще недоступна всем, лучше используй 2.0-flash или точное название из списка моделей
+                messages: [
+                    {
+                        role: "user",
+                        content: prompt
+                    }
+                ],
+                // Важный параметр для генерации картинок в Gemini
+                modalities: ['image', 'text']
             },
             {
                 headers: {
                     'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
                     'Content-Type': 'application/json',
-                    'HTTP-Referer': 'https://telegram-mini-app.com', // Обязательно для OpenRouter
+                    'HTTP-Referer': 'https://banana-gen.app',
                     'X-Title': 'BananaGen'
                 }
             }
         );
 
-        // Проверяем, пришел ли ответ
-        if (response.data && response.data.data && response.data.data.length > 0) {
-            console.log('✅ Ответ от OpenRouter получен!');
-            
-            // Достаем Base64 строку
-            const b64 = response.data.data[0].b64_json;
-            
-            // Превращаем в готовый Data URL для браузера
-            const imageUrl = `data:image/png;base64,${b64}`;
+        // Логируем структуру ответа, чтобы видеть, что пришло
+        // console.log('Ответ OpenRouter:', JSON.stringify(response.data, null, 2));
 
-            // Отправляем клиенту
-            res.json({ imageUrl: imageUrl });
-        } else {
-            console.error('⚠️ Пустой ответ от API:', response.data);
-            res.status(500).json({ error: 'API не вернуло изображение' });
+        const choices = response.data.choices;
+        
+        // Разбираем ответ согласно твоей документации
+        // Ищем message.images
+        if (choices && choices.length > 0) {
+            const message = choices[0].message;
+            
+            // Проверка 1: Если картинка пришла в спец. поле images (как в доке Gemini)
+            if (message.images && message.images.length > 0) {
+                const imageUrl = message.images[0].image_url.url; // Base64
+                console.log('✅ Картинка получена (метод images)');
+                return res.json({ imageUrl: imageUrl });
+            } 
+            // Проверка 2: Иногда OpenRouter возвращает картинку как Markdown ссылку в content
+            else if (message.content && message.content.includes('http')) {
+                 // Пытаемся найти URL в тексте (простой парсинг)
+                 const urlMatch = message.content.match(/\((https?:\/\/[^\)]+)\)/);
+                 if (urlMatch) {
+                     console.log('✅ Картинка найдена в тексте');
+                     return res.json({ imageUrl: urlMatch[1] });
+                 }
+            }
         }
 
+        console.error('⚠️ Картинка не найдена в ответе:', JSON.stringify(response.data));
+        res.status(500).json({ error: 'API не вернуло картинку (возможно, модель только текстовая)' });
+
     } catch (error) {
-        // Подробный вывод ошибки в консоль
         console.error('❌ ОШИБКА ЗАПРОСА:');
         if (error.response) {
-            // Ошибка от самого OpenRouter (например, неверный ключ или модель)
             console.error('Status:', error.response.status);
             console.error('Data:', JSON.stringify(error.response.data, null, 2));
             res.status(500).json({ error: error.response.data.error?.message || 'Ошибка API' });
         } else {
-            // Ошибка сети или кода
             console.error(error.message);
-            res.status(500).json({ error: 'Ошибка соединения с API' });
+            res.status(500).json({ error: 'Ошибка сети' });
         }
     }
 });
