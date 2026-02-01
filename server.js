@@ -12,7 +12,7 @@ const publicPath = path.join(__dirname, 'public');
 const indexPath = path.join(publicPath, 'index.html');
 
 app.use(cors());
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '50mb' })); // Увеличим лимит, так как картинки могут приходить в base64
 app.use(express.static(publicPath));
 
 // Логирование
@@ -21,7 +21,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// === API ГЕНЕРАЦИИ (OpenRouter / Gemini) ===
+// === API ГЕНЕРАЦИИ (OpenRouter / Gemini 3 Preview) ===
 app.post('/api/generate', async (req, res) => {
     const { prompt } = req.body;
     console.log('📝 Получен промпт:', prompt);
@@ -31,21 +31,20 @@ app.post('/api/generate', async (req, res) => {
     }
 
     try {
-        console.log('⏳ Отправляю запрос к Gemini через OpenRouter...');
+        console.log('⏳ Отправляю запрос к Gemini 3 через OpenRouter...');
 
-        // Используем эндпоинт chat/completions, как в твоей документации
         const response = await axios.post(
             'https://openrouter.ai/api/v1/chat/completions',
             {
-                // Модель из твоего примера
-                model: 'google/gemini-2.0-flash-001', // ВНИМАНИЕ: gemini-3 может быть еще недоступна всем, лучше используй 2.0-flash или точное название из списка моделей
+                // Указанная вами модель
+                model: 'google/gemini-3-pro-image-preview',
                 messages: [
                     {
                         role: "user",
-                        content: prompt
+                        content: prompt // Подставляем промпт от клиента
                     }
                 ],
-                // Важный параметр для генерации картинок в Gemini
+                // Ваш параметр для генерации картинок
                 modalities: ['image', 'text']
             },
             {
@@ -58,42 +57,39 @@ app.post('/api/generate', async (req, res) => {
             }
         );
 
-        // Логируем структуру ответа, чтобы видеть, что пришло
-        // console.log('Ответ OpenRouter:', JSON.stringify(response.data, null, 2));
-
-        const choices = response.data.choices;
+        const result = response.data;
         
-        // Разбираем ответ согласно твоей документации
-        // Ищем message.images
-        if (choices && choices.length > 0) {
-            const message = choices[0].message;
+        // Логика парсинга из вашего примера
+        if (result.choices && result.choices.length > 0) {
+            const message = result.choices[0].message;
             
-            // Проверка 1: Если картинка пришла в спец. поле images (как в доке Gemini)
+            // Проверяем наличие массива images (как в вашем примере)
             if (message.images && message.images.length > 0) {
-                const imageUrl = message.images[0].image_url.url; // Base64
-                console.log('✅ Картинка получена (метод images)');
+                // Берем первую картинку
+                const imageUrl = message.images[0].image_url.url; 
+                console.log('✅ Картинка получена (Base64/URL)');
                 return res.json({ imageUrl: imageUrl });
             } 
-            // Проверка 2: Иногда OpenRouter возвращает картинку как Markdown ссылку в content
-            else if (message.content && message.content.includes('http')) {
-                 // Пытаемся найти URL в тексте (простой парсинг)
+            // На случай, если модель решит вернуть текст или markdown ссылку
+            else if (message.content) {
+                 console.log('⚠️ Поле images пустое, проверяем контент...');
+                 // Пытаемся найти markdown ссылку на всякий случай
                  const urlMatch = message.content.match(/\((https?:\/\/[^\)]+)\)/);
                  if (urlMatch) {
-                     console.log('✅ Картинка найдена в тексте');
                      return res.json({ imageUrl: urlMatch[1] });
                  }
             }
         }
 
-        console.error('⚠️ Картинка не найдена в ответе:', JSON.stringify(response.data));
-        res.status(500).json({ error: 'API не вернуло картинку (возможно, модель только текстовая)' });
+        console.error('⚠️ Структура ответа не содержит картинку:', JSON.stringify(result));
+        res.status(500).json({ error: 'API вернуло ответ без картинки' });
 
     } catch (error) {
         console.error('❌ ОШИБКА ЗАПРОСА:');
         if (error.response) {
             console.error('Status:', error.response.status);
-            console.error('Data:', JSON.stringify(error.response.data, null, 2));
-            res.status(500).json({ error: error.response.data.error?.message || 'Ошибка API' });
+            // console.error('Data:', JSON.stringify(error.response.data, null, 2)); // Можно раскомментировать для отладки
+            res.status(500).json({ error: error.response.data.error?.message || 'Ошибка API OpenRouter' });
         } else {
             console.error(error.message);
             res.status(500).json({ error: 'Ошибка сети' });
