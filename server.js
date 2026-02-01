@@ -7,6 +7,7 @@ const axios = require('axios');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 const publicPath = path.join(__dirname, 'public');
 const indexPath = path.join(publicPath, 'index.html');
@@ -21,34 +22,53 @@ app.use((req, res, next) => {
     next();
 });
 
-// === API ГЕНЕРАЦИИ (OpenRouter / Gemini 3) ===
+// === API ГЕНЕРАЦИИ ===
 app.post('/api/generate', async (req, res) => {
-    const { prompt } = req.body;
+    const { prompt, initData } = req.body; // Получаем initData от клиента
     console.log('📝 Получен промпт:', prompt);
 
     if (!process.env.OPENROUTER_API_KEY) {
-        return res.status(500).json({ error: 'Нет API ключа на сервере' });
+        return res.status(500).json({ error: 'Нет OpenRouter API ключа' });
+    }
+    if (!TG_TOKEN) {
+        return res.status(500).json({ error: 'Нет Telegram Bot API ключа' });
+    }
+
+    // 1. Парсим initData, чтобы узнать ID пользователя
+    let chatId = null;
+    try {
+        if (initData) {
+            const urlParams = new URLSearchParams(initData);
+            const userJson = urlParams.get('user');
+            if (userJson) {
+                const user = JSON.parse(userJson);
+                chatId = user.id;
+                console.log('👤 Пользователь определен:', user.first_name, `(ID: ${chatId})`);
+            }
+        }
+    } catch (e) {
+        console.error('⚠️ Ошибка парсинга initData:', e.message);
+        // Не прерываем, попробуем просто сгенерировать, но не отправим в ЛС
     }
 
     try {
-        console.log('⏳ Отправляю запрос к Gemini 3 через OpenRouter...');
+        console.log('⏳ Генерация через Gemini...');
 
+        // 2. Запрос к OpenRouter
         const response = await axios.post(
             'https://openrouter.ai/api/v1/chat/completions',
             {
-                model: 'google/gemini-3-pro-image-preview', // Ваша модель
+                model: 'google/gemini-3-pro-image-preview',
                 messages: [
                     {
-                        // СИСТЕМНЫЙ ПРОМПТ: ЗАПРЕЩАЕМ ТЕКСТ, ТРЕБУЕМ ФОТО
                         role: "system",
-                        content: "You are an advanced AI image generator. Your ONLY task is to generate an image based on the user prompt. Do not output any conversational text, explanations, or code. Just generate the image. If the user asks for 'sunset', generate a picture of a sunset."
+                        content: "You are an advanced AI image generator. Your ONLY task is to generate an image based on the user prompt. Do not output any conversational text. Just generate the image."
                     },
                     {
                         role: "user",
-                        content: `Generate an image of: ${prompt}` // Усиливаем запрос
+                        content: `Generate an image of: ${prompt}`
                     }
                 ]
-                // УБРАЛИ modalities, так как OpenRouter ругается на него ошибкой 404
             },
             {
                 headers: {
@@ -60,50 +80,53 @@ app.post('/api/generate', async (req, res) => {
             }
         );
 
-        const result = response.data;
-        // console.log('Full Response:', JSON.stringify(result, null, 2)); // Для отладки
-
-        if (result.choices && result.choices.length > 0) {
-            const message = result.choices[0].message;
-            
-            // 1. Проверяем, пришла ли картинка в специальном поле (редко для OpenRouter)
+        // 3. Достаем ссылку на картинку
+        let imageUrl = null;
+        const choices = response.data.choices;
+        if (choices && choices.length > 0) {
+            const message = choices[0].message;
             if (message.images && message.images.length > 0) {
-                const imageUrl = message.images[0].image_url.url; 
-                console.log('✅ Картинка получена (поле images)');
-                return res.json({ imageUrl: imageUrl });
-            } 
-            
-            // 2. Чаще всего Gemini через OpenRouter возвращает Markdown ссылку в тексте
-            // Пример: "Here is your image: ![Image](https://...)"
-            if (message.content) {
-                 console.log('🔍 Анализирую текст ответа на наличие ссылок...');
-                 
-                 // Ищем паттерн markdown картинки: ![alt](url) или просто (https://...)
+                imageUrl = message.images[0].image_url.url;
+            } else if (message.content) {
                  const urlMatch = message.content.match(/\((https?:\/\/[^\)]+)\)/);
-                 
-                 if (urlMatch) {
-                     console.log('✅ Картинка найдена в тексте (Markdown)');
-                     return res.json({ imageUrl: urlMatch[1] });
-                 } else {
-                     // Если ссылок нет, значит модель все-таки ответила текстом
-                     console.warn('⚠️ Модель ответила текстом без картинки:', message.content);
-                 }
+                 if (urlMatch) imageUrl = urlMatch[1];
             }
         }
 
-        console.error('⚠️ Картинка не найдена. Ответ API:', JSON.stringify(result));
-        res.status(500).json({ error: 'Не удалось сгенерировать изображение. Попробуйте еще раз.' });
+        if (!imageUrl) {
+            throw new Error('Не удалось найти ссылку на картинку в ответе AI');
+        }
+
+        console.log('✅ Картинка сгенерирована:', imageUrl);
+
+        // 4. Отправляем картинку в Telegram как ДОКУМЕНТ (sendDocument)
+        // Это сохраняет качество и отправляет "файлом"
+        let sentToChat = false;
+        if (chatId) {
+            try {
+                console.log(`📤 Отправка файла в чат ${chatId}...`);
+                await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/sendDocument`, {
+                    chat_id: chatId,
+                    document: imageUrl, // Telegram умеет скачивать по URL сам
+                    caption: `🎨 Ваш арт по запросу: "${prompt}"`
+                });
+                sentToChat = true;
+                console.log('📬 Файл успешно отправлен в Telegram!');
+            } catch (tgError) {
+                console.error('❌ Ошибка отправки в Telegram:', tgError.response?.data || tgError.message);
+                // Не валим весь запрос, если не ушло в телегу, просто вернем картинку на сайт
+            }
+        }
+
+        // 5. Возвращаем ответ фронтенду
+        res.json({ 
+            imageUrl: imageUrl, 
+            sentToChat: sentToChat 
+        });
 
     } catch (error) {
-        console.error('❌ ОШИБКА ЗАПРОСА:');
-        if (error.response) {
-            console.error('Status:', error.response.status);
-            console.error('Data:', JSON.stringify(error.response.data, null, 2));
-            res.status(500).json({ error: error.response.data.error?.message || 'Ошибка API OpenRouter' });
-        } else {
-            console.error(error.message);
-            res.status(500).json({ error: 'Ошибка сети' });
-        }
+        console.error('❌ ОШИБКА:', error.message);
+        res.status(500).json({ error: 'Ошибка генерации или сети' });
     }
 });
 
