@@ -4,7 +4,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
 const axios = require('axios');
-const FormData = require('form-data'); // Нужен для отправки файлов
+const FormData = require('form-data');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -14,163 +14,154 @@ const publicPath = path.join(__dirname, 'public');
 const indexPath = path.join(publicPath, 'index.html');
 
 app.use(cors());
+// Увеличиваем лимит, чтобы пролезали картинки
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(express.static(publicPath));
 
-// === Хелпер для логов с временем ===
-function log(message, data = '') {
+// Хелпер для логов
+function log(message) {
     const time = new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-    console.log(`[${time}] ${message}`, data ? data : '');
+    console.log(`[${time}] ${message}`);
 }
 
-// Логирование всех запросов
-app.use((req, res, next) => {
-    log(`[ЗАПРОС] ${req.method} ${req.url}`);
-    next();
+// 1. ГЕНЕРАЦИЯ ПО ТЕКСТУ (Старая функция)
+app.post('/api/generate', async (req, res) => {
+    handleGeneration(req, res, null);
 });
 
-// === API ГЕНЕРАЦИИ ===
-app.post('/api/generate', async (req, res) => {
+// 2. ФОТОСЕССИЯ ПРОДУКТА (Картинка + Текст)
+app.post('/api/product-gen', async (req, res) => {
+    const { imageBase64 } = req.body;
+    handleGeneration(req, res, imageBase64);
+});
+
+// Общая функция генерации
+async function handleGeneration(req, res, inputImageBase64) {
     const { prompt, initData } = req.body;
-    log(`📝 Получен промпт: "${prompt}"`);
+    log(`🎨 Генерация. Промпт: "${prompt.substring(0, 20)}..."`);
 
-    if (!process.env.OPENROUTER_API_KEY) {
-        log('❌ Ошибка: Нет API ключа OpenRouter');
-        return res.status(500).json({ error: 'Нет OpenRouter API ключа' });
-    }
+    let chatId = getChatId(initData);
 
-    // 1. Парсим ID пользователя Telegram
-    let chatId = null;
     try {
-        if (initData) {
-            const urlParams = new URLSearchParams(initData);
-            const userJson = urlParams.get('user');
-            if (userJson) {
-                const user = JSON.parse(userJson);
-                chatId = user.id;
-                log(`👤 Пользователь: ${user.first_name} (ID: ${chatId})`);
+        // Формируем сообщения для нейросети
+        const messages = [
+            {
+                role: "system",
+                content: "You are an AI visual artist. Generate an image based on the user request."
             }
+        ];
+
+        // Если есть картинка продукта, добавляем её в контекст
+        if (inputImageBase64) {
+            messages.push({
+                role: "user",
+                content: [
+                    { type: "text", text: `Generate a new image based on this product image and this description: ${prompt}` },
+                    { type: "image_url", image_url: { url: inputImageBase64 } }
+                ]
+            });
+        } else {
+            messages.push({ role: "user", content: prompt });
         }
-    } catch (e) {
-        log('⚠️ Ошибка парсинга initData:', e.message);
-    }
 
-    try {
-        log('⏳ Отправка запроса к AI...');
-
-        // 2. Генерация картинки
         const response = await axios.post(
             'https://openrouter.ai/api/v1/chat/completions',
             {
-                model: 'google/gemini-3-pro-image-preview',
-                messages: [
-                    {
-                        role: "system",
-                        content: "You are an advanced AI image generator. Your ONLY task is to generate an image based on the user prompt. Do not output any conversational text. Just generate the image."
-                    },
-                    {
-                        role: "user",
-                        content: `Generate an image of: ${prompt}`
-                    }
-                ]
+                // Используем модель, которая понимает картинки (Multimodal)
+                model: 'google/gemini-2.0-flash-001', 
+                messages: messages
             },
             {
                 headers: {
                     'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
                     'Content-Type': 'application/json',
                     'HTTP-Referer': 'https://banana-gen.app',
-                    'X-Title': 'BananaGen'
                 }
             }
         );
 
-        // 3. Извлечение результата
+        // Парсим ответ (ищем URL картинки)
         let imageUrl = null;
-        const choices = response.data.choices;
-        if (choices && choices.length > 0) {
-            const message = choices[0].message;
-            if (message.images && message.images.length > 0) {
-                imageUrl = message.images[0].image_url.url;
-            } else if (message.content) {
-                 const urlMatch = message.content.match(/\((https?:\/\/[^\)]+)\)/);
-                 if (urlMatch) imageUrl = urlMatch[1];
-                 else if (message.content.startsWith('http')) imageUrl = message.content; // Иногда ссылка прямая
-            }
+        const choice = response.data.choices?.[0]?.message;
+        
+        if (choice?.content) {
+             const urlMatch = choice.content.match(/\((https?:\/\/[^\)]+)\)/) || choice.content.match(/https?:\/\/[^\s"]+/);
+             if (urlMatch) imageUrl = urlMatch[1] || urlMatch[0];
         }
+        // Некоторые модели возвращают image_url напрямую, зависит от провайдера
+        if (!imageUrl && choice?.images?.length) imageUrl = choice.images[0].url;
 
-        if (!imageUrl) {
-            throw new Error('Не удалось найти ссылку/картинку в ответе AI');
-        }
+        if (!imageUrl) throw new Error('AI не вернул ссылку на картинку');
 
-        log('✅ Картинка сгенерирована (URL или Base64 получен)');
-
-        // 4. Отправка в Telegram (Сложный метод через FormData, чтобы работало и с URL, и с Base64)
+        // Отправка в ТГ
         let sentToChat = false;
-        if (chatId && TG_TOKEN) {
-            try {
-                log(`📤 Подготовка отправки в чат ${chatId}...`);
-                
-                const form = new FormData();
-                form.append('chat_id', chatId);
-                form.append('caption', `🎨 Ваш арт: "${prompt}"`);
+        if (chatId) sentToChat = await sendToTelegram(chatId, imageUrl, prompt, false);
 
-                // Проверяем: это Base64 или URL?
-                if (imageUrl.startsWith('data:')) {
-                    // Это Base64 -> Превращаем в буфер
-                    const base64Data = imageUrl.split(';base64,').pop();
-                    const buffer = Buffer.from(base64Data, 'base64');
-                    form.append('document', buffer, { filename: 'generated_art.png' });
-                    log('📦 Конвертация Base64 в файл выполнена');
-                } else {
-                    // Это URL -> Скачиваем поток и отправляем (самый надежный способ)
-                    // Если просто кинуть URL в telegram, он может не скачать, если ссылка "грязная"
-                    try {
-                        const imageStream = await axios.get(imageUrl, { responseType: 'stream' });
-                        form.append('document', imageStream.data, { filename: 'generated_art.png' });
-                        log('📦 Скачивание изображения по URL для отправки...');
-                    } catch (downloadError) {
-                         // Если не вышло скачать, попробуем отправить просто ссылку (fallback)
-                         log('⚠️ Не удалось скачать файл, пробую отправить ссылку напрямую...');
-                         form.append('document', imageUrl);
-                    }
-                }
-
-                // Отправляем форму в Telegram
-                await axios.post(
-                    `https://api.telegram.org/bot${TG_TOKEN}/sendDocument`, 
-                    form, 
-                    { headers: form.getHeaders() }
-                );
-
-                sentToChat = true;
-                log('📬 Файл успешно доставлен в Telegram!');
-
-            } catch (tgError) {
-                log('❌ Ошибка отправки в Telegram:');
-                if (tgError.response) {
-                    console.error(JSON.stringify(tgError.response.data, null, 2));
-                } else {
-                    console.error(tgError.message);
-                }
-            }
-        }
-
-        // 5. Ответ фронтенду
-        res.json({ imageUrl: imageUrl, sentToChat: sentToChat });
+        res.json({ imageUrl, sentToChat });
 
     } catch (error) {
-        log('❌ КРИТИЧЕСКАЯ ОШИБКА:', error.message);
-        if (error.response) {
-            console.error('Детали ошибки API:', JSON.stringify(error.response.data, null, 2));
-        }
-        res.status(500).json({ error: 'Ошибка генерации' });
+        console.error(error.response?.data || error.message);
+        res.json({ error: 'Ошибка генерации', details: error.message });
+    }
+}
+
+// 3. ЗАГРУЗКА БЕЗ СЖАТИЯ (Файл -> Документ в ТГ)
+app.post('/api/send-file', async (req, res) => {
+    const { fileBase64, fileName, initData } = req.body;
+    const chatId = getChatId(initData);
+
+    if (!chatId) return res.json({ success: false, error: 'Не удалось определить ID чата' });
+
+    try {
+        log(`📂 Отправка файла: ${fileName}`);
+        
+        // Отправляем как документ (без сжатия)
+        await sendToTelegram(chatId, fileBase64, 'Ваш файл без сжатия 📁', true, fileName);
+        
+        res.json({ success: true });
+    } catch (e) {
+        console.error(e);
+        res.json({ success: false, error: 'Ошибка отправки файла' });
     }
 });
 
-app.get('/', (req, res) => {
-    res.sendFile(indexPath);
-});
+// --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 
-app.listen(PORT, () => {
-    log(`🚀 Сервер запущен на порту ${PORT}`);
-});
+function getChatId(initData) {
+    try {
+        const urlParams = new URLSearchParams(initData);
+        const user = JSON.parse(urlParams.get('user'));
+        return user.id;
+    } catch (e) {
+        return null;
+    }
+}
+
+async function sendToTelegram(chatId, resource, caption, isDocument, fileName = 'image.png') {
+    try {
+        const form = new FormData();
+        form.append('chat_id', chatId);
+        form.append('caption', caption);
+
+        if (resource.startsWith('http')) {
+            // Если это URL (от нейросети)
+            const stream = await axios.get(resource, { responseType: 'stream' });
+            form.append(isDocument ? 'document' : 'photo', stream.data, { filename: fileName });
+        } else if (resource.startsWith('data:')) {
+            // Если это Base64 (от пользователя)
+            const base64Data = resource.split(';base64,').pop();
+            const buffer = Buffer.from(base64Data, 'base64');
+            form.append('document', buffer, { filename: fileName }); // Всегда как документ для качества
+        }
+
+        const method = isDocument ? 'sendDocument' : 'sendPhoto';
+        await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/${method}`, form, { headers: form.getHeaders() });
+        return true;
+    } catch (e) {
+        console.error('Telegram send error:', e.message);
+        return false;
+    }
+}
+
+app.get('/', (req, res) => res.sendFile(indexPath));
+app.listen(PORT, () => log(`🚀 Server running on port ${PORT}`));
