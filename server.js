@@ -6,6 +6,9 @@ const path = require('path');
 const axios = require('axios');
 const FormData = require('form-data');
 
+// ПОДКЛЮЧАЕМ НАШ НОВЫЙ ФАЙЛ С ПРОМПТАМИ
+const { buildMessages } = require('./prompts');
+
 const app = express();
 const PORT = process.env.PORT || 4000;
 const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -14,61 +17,39 @@ const publicPath = path.join(__dirname, 'public');
 const indexPath = path.join(publicPath, 'index.html');
 
 app.use(cors());
-app.use(bodyParser.json({ limit: '50mb' })); // Лимит для больших картинок
+app.use(bodyParser.json({ limit: '50mb' })); 
 app.use(express.static(publicPath));
 
 // Хелпер для логов
-function log(message) {
+function log(message, data = null) {
     const time = new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
     console.log(`[${time}] ${message}`);
+    if (data) console.log(JSON.stringify(data, null, 2));
 }
 
-// 1. УНИВЕРСАЛЬНАЯ ГЕНЕРАЦИЯ (Текст ИЛИ Текст+Фото)
-app.post('/api/generate', async (req, res) => {
-    // Теперь принимаем и картинку тоже
-    const { imageBase64 } = req.body;
-    handleGeneration(req, res, imageBase64);
-});
+// === API ENDPOINTS ===
 
-// 2. ФОТОСЕССИЯ ПРОДУКТА (То же самое, но отдельный эндпоинт для логики разделения)
-app.post('/api/product-gen', async (req, res) => {
-    const { imageBase64 } = req.body;
-    handleGeneration(req, res, imageBase64);
-});
+// Общий обработчик для генерации (Текст и Фотосессия)
+app.post('/api/generate', async (req, res) => handleGeneration(req, res));
+app.post('/api/product-gen', async (req, res) => handleGeneration(req, res));
 
-// ОСНОВНАЯ ЛОГИКА ГЕНЕРАЦИИ
-async function handleGeneration(req, res, inputImageBase64) {
-    const { prompt, initData } = req.body;
-    log(`🎨 Генерация. Промпт: "${prompt ? prompt.substring(0, 20) : 'Без промпта'}..."`);
+async function handleGeneration(req, res) {
+    const { prompt, initData, imageBase64 } = req.body;
+    
+    log(`🎨 Запрос Nano Banana Pro. Промпт: "${prompt ? prompt.substring(0, 30) : '...'}"`);
 
     let chatId = getChatId(initData);
 
     try {
-        const messages = [
-            {
-                role: "system",
-                content: "You are an AI visual artist. Generate an image based on the user request."
-            }
-        ];
+        // 1. БЕРЕМ ПРОМПТЫ ИЗ ОТДЕЛЬНОГО ФАЙЛА
+        const messages = buildMessages(prompt, imageBase64);
 
-        // Логика: Если есть картинка -> Vision запрос, если нет -> Текстовый
-        if (inputImageBase64) {
-            messages.push({
-                role: "user",
-                content: [
-                    { type: "text", text: `Generate a new image based on this image and description: ${prompt}` },
-                    { type: "image_url", image_url: { url: inputImageBase64 } }
-                ]
-            });
-        } else {
-            messages.push({ role: "user", content: prompt });
-        }
-
+        // 2. ОТПРАВЛЯЕМ ЗАПРОС
         const response = await axios.post(
             'https://openrouter.ai/api/v1/chat/completions',
             {
-                model: 'google/gemini-2.0-flash-001', 
-                messages: messages
+                model: 'google/gemini-2.0-flash-001', // Твоя модель
+                messages: messages,
             },
             {
                 headers: {
@@ -79,31 +60,49 @@ async function handleGeneration(req, res, inputImageBase64) {
             }
         );
 
-        // Парсинг ответа
+        // 3. ПАРСИМ ОТВЕТ
         let imageUrl = null;
         const choice = response.data.choices?.[0]?.message;
         
+        // Поиск ссылки (Markdown или Raw URL)
         if (choice?.content) {
-             const urlMatch = choice.content.match(/\((https?:\/\/[^\)]+)\)/) || choice.content.match(/https?:\/\/[^\s"]+/);
-             if (urlMatch) imageUrl = urlMatch[1] || urlMatch[0];
+             const mdMatch = choice.content.match(/!\[.*?\]\((https?:\/\/[^\)]+)\)/); // Markdown
+             if (mdMatch) imageUrl = mdMatch[1];
+             else {
+                 const urlMatch = choice.content.match(/(https?:\/\/[^\s\)]+)/); // Просто ссылка
+                 if (urlMatch) imageUrl = urlMatch[1];
+             }
         }
+        // Поиск в массиве images
         if (!imageUrl && choice?.images?.length) imageUrl = choice.images[0].url;
 
-        if (!imageUrl) throw new Error('AI не вернул ссылку на картинку');
+        if (!imageUrl) {
+            log('⚠️ AI ответил текстом (нет ссылки):', choice?.content);
+            throw new Error(choice?.content || 'AI не вернул ссылку');
+        }
 
-        // Отправка в ТГ
+        log(`✅ Ссылка получена!`);
+
+        // 4. ОТПРАВКА В ТЕЛЕГРАМ
         let sentToChat = false;
-        if (chatId) sentToChat = await sendToTelegram(chatId, imageUrl, prompt || 'AI Art', false);
+        if (chatId) {
+            sentToChat = await sendToTelegram(chatId, imageUrl, prompt || 'Banana Art', false);
+        }
 
         res.json({ imageUrl, sentToChat });
 
     } catch (error) {
-        console.error(error.response?.data || error.message);
+        log('❌ Ошибка:', error.response?.data || error.message);
         res.json({ error: 'Ошибка генерации', details: error.message });
     }
 }
 
-// --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+// Заглушка для отправки файлов (если используется)
+app.post('/api/send-file', async (req, res) => { res.json({success: false, error: "Not implemented in Pro version yet"}); });
+
+
+// === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
+
 function getChatId(initData) {
     try {
         const urlParams = new URLSearchParams(initData);
@@ -112,29 +111,38 @@ function getChatId(initData) {
     } catch (e) { return null; }
 }
 
+// Фикс "Wrong padding length"
+function fixBase64(str) {
+    str = str.replace(/\s/g, '');
+    while (str.length % 4 !== 0) str += '=';
+    return str;
+}
+
 async function sendToTelegram(chatId, resource, caption, isDocument, fileName = 'image.png') {
     try {
         const form = new FormData();
         form.append('chat_id', chatId);
-        form.append('caption', caption);
+        form.append('caption', caption ? caption.substring(0, 1000) : 'BananaGen');
 
         if (resource.startsWith('http')) {
             const stream = await axios.get(resource, { responseType: 'stream' });
             form.append(isDocument ? 'document' : 'photo', stream.data, { filename: fileName });
         } else if (resource.startsWith('data:')) {
-            const base64Data = resource.split(';base64,').pop();
+            let base64Data = resource.split(';base64,').pop();
+            base64Data = fixBase64(base64Data); // Применяем лечение
             const buffer = Buffer.from(base64Data, 'base64');
             form.append('document', buffer, { filename: fileName });
         }
 
         const method = isDocument ? 'sendDocument' : 'sendPhoto';
         await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/${method}`, form, { headers: form.getHeaders() });
+        log('📨 Отправлено в Telegram');
         return true;
     } catch (e) {
-        console.error('Telegram send error:', e.message);
+        log('❌ Telegram Error:', e.response?.data || e.message);
         return false;
     }
 }
 
 app.get('/', (req, res) => res.sendFile(indexPath));
-app.listen(PORT, () => log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, () => log(`🚀 Nano Banana Pro запущен на порту ${PORT}`));
