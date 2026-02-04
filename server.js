@@ -6,7 +6,7 @@ const path = require('path');
 const axios = require('axios');
 const FormData = require('form-data');
 
-// ПОДКЛЮЧАЕМ НАШ НОВЫЙ ФАЙЛ С ПРОМПТАМИ
+// Подключаем промпты
 const { buildMessages } = require('./prompts');
 
 const app = express();
@@ -20,16 +20,25 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' })); 
 app.use(express.static(publicPath));
 
-// Хелпер для логов
+// --- БЕЗОПАСНЫЙ ЛОГГЕР ---
 function log(message, data = null) {
     const time = new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
     console.log(`[${time}] ${message}`);
-    if (data) console.log(JSON.stringify(data, null, 2));
+    
+    if (data) {
+        try {
+            // Пытаемся вывести данные красиво
+            console.log(JSON.stringify(data, null, 2));
+        } catch (e) {
+            // Если данные сложные (циклические), выводим просто сообщение
+            console.log('  [Детали ошибки слишком сложные для вывода в JSON]');
+            if (data.message) console.log('  Сообщение ошибки:', data.message);
+        }
+    }
 }
 
 // === API ENDPOINTS ===
 
-// Общий обработчик для генерации (Текст и Фотосессия)
 app.post('/api/generate', async (req, res) => handleGeneration(req, res));
 app.post('/api/product-gen', async (req, res) => handleGeneration(req, res));
 
@@ -41,14 +50,12 @@ async function handleGeneration(req, res) {
     let chatId = getChatId(initData);
 
     try {
-        // 1. БЕРЕМ ПРОМПТЫ ИЗ ОТДЕЛЬНОГО ФАЙЛА
         const messages = buildMessages(prompt, imageBase64);
 
-        // 2. ОТПРАВЛЯЕМ ЗАПРОС
         const response = await axios.post(
             'https://openrouter.ai/api/v1/chat/completions',
             {
-                model: 'google/gemini-2.0-flash-001', // Твоя модель
+                model: 'google/gemini-2.0-flash-001', 
                 messages: messages,
             },
             {
@@ -60,30 +67,29 @@ async function handleGeneration(req, res) {
             }
         );
 
-        // 3. ПАРСИМ ОТВЕТ
         let imageUrl = null;
         const choice = response.data.choices?.[0]?.message;
         
-        // Поиск ссылки (Markdown или Raw URL)
+        // Парсинг ссылки
         if (choice?.content) {
-             const mdMatch = choice.content.match(/!\[.*?\]\((https?:\/\/[^\)]+)\)/); // Markdown
+             const mdMatch = choice.content.match(/!\[.*?\]\((https?:\/\/[^\)]+)\)/);
              if (mdMatch) imageUrl = mdMatch[1];
              else {
-                 const urlMatch = choice.content.match(/(https?:\/\/[^\s\)]+)/); // Просто ссылка
+                 const urlMatch = choice.content.match(/(https?:\/\/[^\s\)]+)/);
                  if (urlMatch) imageUrl = urlMatch[1];
              }
         }
-        // Поиск в массиве images
         if (!imageUrl && choice?.images?.length) imageUrl = choice.images[0].url;
 
         if (!imageUrl) {
-            log('⚠️ AI ответил текстом (нет ссылки):', choice?.content);
-            throw new Error(choice?.content || 'AI не вернул ссылку');
+            // Логируем только текстовый контент, чтобы не сломать JSON
+            log('⚠️ AI ответил без ссылки. Текст:', choice?.content || 'Пусто');
+            throw new Error('AI не вернул ссылку');
         }
 
         log(`✅ Ссылка получена!`);
 
-        // 4. ОТПРАВКА В ТЕЛЕГРАМ
+        // Отправка в ТГ
         let sentToChat = false;
         if (chatId) {
             sentToChat = await sendToTelegram(chatId, imageUrl, prompt || 'Banana Art', false);
@@ -92,13 +98,14 @@ async function handleGeneration(req, res) {
         res.json({ imageUrl, sentToChat });
 
     } catch (error) {
-        log('❌ Ошибка:', error.response?.data || error.message);
+        // Логируем безопасно
+        const errorInfo = error.response ? error.response.data : error.message;
+        log('❌ Ошибка выполнения:', errorInfo);
         res.json({ error: 'Ошибка генерации', details: error.message });
     }
 }
 
-// Заглушка для отправки файлов (если используется)
-app.post('/api/send-file', async (req, res) => { res.json({success: false, error: "Not implemented in Pro version yet"}); });
+app.post('/api/send-file', async (req, res) => { res.json({success: false, error: "Not implemented"}); });
 
 
 // === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
@@ -111,7 +118,6 @@ function getChatId(initData) {
     } catch (e) { return null; }
 }
 
-// Фикс "Wrong padding length"
 function fixBase64(str) {
     str = str.replace(/\s/g, '');
     while (str.length % 4 !== 0) str += '=';
@@ -124,22 +130,46 @@ async function sendToTelegram(chatId, resource, caption, isDocument, fileName = 
         form.append('chat_id', chatId);
         form.append('caption', caption ? caption.substring(0, 1000) : 'BananaGen');
 
+        // ВАРИАНТ 1: Если это URL (от нейросети)
         if (resource.startsWith('http')) {
-            const stream = await axios.get(resource, { responseType: 'stream' });
-            form.append(isDocument ? 'document' : 'photo', stream.data, { filename: fileName });
-        } else if (resource.startsWith('data:')) {
+            try {
+                // Пробуем скачать поток
+                const stream = await axios.get(resource, { responseType: 'stream' });
+                form.append(isDocument ? 'document' : 'photo', stream.data, { filename: fileName });
+            } catch (streamError) {
+                log('⚠️ Ошибка скачивания файла, пробую отправить ссылку напрямую...');
+                // Если скачать не вышло, отправляем URL как строку (Телеграм сам скачает)
+                // Но это работает только для 'photo', не для 'document'
+                if (!isDocument) {
+                    await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/sendPhoto`, {
+                        chat_id: chatId,
+                        photo: resource,
+                        caption: caption
+                    });
+                    log('📨 Отправлено (резервный метод по ссылке)');
+                    return true;
+                }
+                throw streamError;
+            }
+        } 
+        // ВАРИАНТ 2: Если это Base64 (от пользователя)
+        else if (resource.startsWith('data:')) {
             let base64Data = resource.split(';base64,').pop();
-            base64Data = fixBase64(base64Data); // Применяем лечение
+            base64Data = fixBase64(base64Data);
             const buffer = Buffer.from(base64Data, 'base64');
             form.append('document', buffer, { filename: fileName });
         }
 
+        // Стандартная отправка формы (если не сработал резервный метод выше)
         const method = isDocument ? 'sendDocument' : 'sendPhoto';
         await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/${method}`, form, { headers: form.getHeaders() });
         log('📨 Отправлено в Telegram');
         return true;
+
     } catch (e) {
-        log('❌ Telegram Error:', e.response?.data || e.message);
+        // Логируем только важную часть ошибки Telegram
+        const tgError = e.response ? e.response.data : e.message;
+        log('❌ Telegram Error (Send Failed):', tgError);
         return false;
     }
 }
