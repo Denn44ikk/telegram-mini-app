@@ -83,7 +83,7 @@
         .upload-area.highlight { background: rgba(51, 144, 236, 0.1); }
         .upload-preview { max-width: 100%; max-height: 200px; border-radius: 10px; display: none; margin-top: 10px; }
 
-        /* ИСПРАВЛЕННЫЙ БЛОК РЕЗУЛЬТАТА */
+        /* БЛОК РЕЗУЛЬТАТА — плейсхолдер и вставленное фото */
         .result-placeholder {
             min-height: 250px; 
             border: 2px dashed var(--hint-color); 
@@ -95,23 +95,39 @@
             color: var(--hint-color); 
             background: var(--card-bg); 
             margin-bottom: 15px;
-            overflow: hidden; /* Чтобы картинка не вылезала */
+            overflow: hidden;
             position: relative;
             transition: all 0.3s;
         }
-        /* Когда картинка готова, убираем рамку и отступы */
         .result-placeholder.has-result {
             border: none;
             background: transparent;
             min-height: auto;
+            padding: 0;
         }
-        
-        .result-placeholder img { 
-            width: 100%; 
+        /* Контейнер для одной картинки — центрирование и аккуратный вид */
+        .result-image-wrap {
+            display: none;
+            width: 100%;
+            justify-content: center;
+            align-items: center;
+            margin: 0 auto 15px;
+        }
+        .result-placeholder.has-result .result-image-wrap {
+            display: flex;
+        }
+        .result-placeholder .result-single-img { 
+            max-width: 100%;
+            width: auto;
+            max-height: 70vh;
+            height: auto;
             border-radius: 16px; 
-            display: none; 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+            object-fit: contain;
+            display: block;
         }
+        /* Одна картинка: скрыта по умолчанию, видна когда есть результат */
+        .result-placeholder:not(.has-result) .result-image-wrap img { display: none; }
 
         .main-btn {
             width: 100%; background-color: var(--button-color); color: var(--button-text);
@@ -126,13 +142,21 @@
         }
         .balance-amount { font-size: 36px; font-weight: bold; margin: 10px 0; }
 
+        .product-result-wrap {
+            display: none;
+            width: 100%;
+            justify-content: center;
+            margin: 0 auto 15px;
+        }
+        .result-placeholder.has-result .product-result-wrap { display: block; }
         .product-images-grid {
-            display: none; gap: 8px; grid-template-columns: repeat(2, 1fr); margin-top: 10px;
+            display: none; gap: 10px; grid-template-columns: repeat(2, 1fr);
+            max-width: 100%; margin: 0 auto;
         }
         .product-images-grid.visible { display: grid; }
         .product-images-grid img {
-            width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.12);
         }
         .product-images-grid .span-full { grid-column: span 2; }
 
@@ -193,12 +217,13 @@
         </label>
 
         <div class="result-placeholder" id="gen-result-area">
-            <!-- Добавил класс placeholder-text, чтобы скрывать его -->
             <div class="placeholder-text" style="display:flex; flex-direction:column; align-items:center;">
                 <i class="fa-regular fa-image" style="font-size: 24px;"></i>
                 <p>Результат</p>
             </div>
-            <img id="gen-img" src="">
+            <div class="result-image-wrap">
+                <img id="gen-img" class="result-single-img" src="" alt="">
+            </div>
         </div>
         
         <button id="btn-gen" class="main-btn" onclick="runGeneration('text')">Сгенерировать</button>
@@ -227,7 +252,9 @@
             <div class="placeholder-text" style="display:flex; flex-direction:column; align-items:center;">
                 <p>Результат (5 фото)</p>
             </div>
-            <div id="product-images-grid" class="product-images-grid"></div>
+            <div class="product-result-wrap">
+                <div id="product-images-grid" class="product-images-grid"></div>
+            </div>
         </div>
 
         <button id="btn-product" class="main-btn" onclick="runGeneration('product')">Обработать</button>

@@ -52,9 +52,9 @@ app.put('/api/settings', (req, res) => {
     }
 });
 
-async function callAI(prompt, imageBase64) {
+async function callAI(prompt, imageBase64, mode) {
     const modelId = getModelId();
-    const messages = buildMessages(prompt, imageBase64);
+    const messages = buildMessages(prompt, imageBase64, mode || 'gen');
     const response = await axios.post(
         'https://openrouter.ai/api/v1/chat/completions',
         { model: modelId, messages },
@@ -90,7 +90,7 @@ async function handleProductGeneration(req, res) {
     try {
         const results = await Promise.all(
             Array(5).fill(null).map((_, i) =>
-                callAI(prompt, imageBase64).then(url => ({ url, ok: true }))
+                callAI(prompt, imageBase64, 'product').then(url => ({ url, ok: true }))
                     .catch(err => ({ error: err.message, ok: false }))
             )
         );
@@ -127,7 +127,7 @@ async function handleGeneration(req, res) {
     const chatId = getChatId(initData);
 
     try {
-        const imageUrl = await callAI(prompt, imageBase64);
+        const imageUrl = await callAI(prompt, imageBase64, 'gen');
         debugLog('2. РЕЗУЛЬТАТ', '✅ Картинка получена');
 
         let sentToChat = false;

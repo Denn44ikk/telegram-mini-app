@@ -42,8 +42,7 @@ function getAvailableModels() {
 
 /**
  * СИСТЕМНЫЙ ПРОМПТ
- * Здесь мы объясняем AI, кто он такой.
- * Для Gemini Flash важно жестко запретить болтовню, иначе она пишет "Here is an image...".
+ * Объясняем AI, что он только генерирует картинки, без болтовни.
  */
 const SYSTEM_PROMPT = `
 You are a strict Image Generation API. 
@@ -51,41 +50,53 @@ You are NOT a chat assistant. You DO NOT converse.
 If you cannot generate an image, output "ERROR: Cannot generate".
 `;
 
+// ========== ПРОМПТЫ (удобно редактировать) ==========
+// Используются в «Фото по промту» (генерация по тексту и опционально по референсу).
+
+/** Только текст — пользователь описал, что нарисовать. %s = userPrompt */
+const PROMPT_GEN_TEXT = 'Generate a high-quality image of: "%s".';
+
+/** Текст + референс — пользователь прикрепил фото и дал инструкции. %s = userPrompt */
+const PROMPT_GEN_WITH_IMAGE = 'Analyze this reference image and generate a NEW high-quality image based on these instructions: "%s". Return ONLY the image.';
+
+// ========== ПРОМПТЫ ФОТОСЕССИИ ==========
+// Используются в «Фотосессия с продуктом» — объект на фото помещается в описанную сцену.
+
+/** Фотосессия: продукт + описание окружения/фона. %s = userPrompt */
+const PROMPT_PRODUCT = 'Place this product photo into a professional product photography scene. Environment and style: "%s". Keep the product clearly visible and well-lit. Return ONLY the image.';
+
 /**
- * ФУНКЦИЯ СБОРКИ СООБЩЕНИЙ
- * Собирает историю переписки для отправки в нейросеть.
+ * Подставляет userPrompt в шаблон (поддержка одной подстановки %s).
  */
-function buildMessages(userPrompt, imageBase64) {
+function applyPrompt(template, userPrompt) {
+    return template.replace('%s', userPrompt);
+}
+
+/**
+ * Собирает сообщения для API. mode: 'gen' | 'product'.
+ * gen — экран «Фото по промту» (с картинкой или без).
+ * product — экран «Фотосессия с продуктом» (всегда с картинкой продукта).
+ */
+function buildMessages(userPrompt, imageBase64, mode) {
+    mode = mode || 'gen';
     const messages = [
-        {
-            role: "system",
-            content: SYSTEM_PROMPT
-        }
+        { role: "system", content: SYSTEM_PROMPT }
     ];
 
     if (imageBase64) {
-        // --- РЕЖИМ: КАРТИНКА + ТЕКСТ (Vision) ---
-        // Используется для "Фотосессии" и "Фото по промту" с референсом
+        const textTemplate = mode === 'product' ? PROMPT_PRODUCT : PROMPT_GEN_WITH_IMAGE;
+        const text = applyPrompt(textTemplate, userPrompt);
         messages.push({
             role: "user",
             content: [
-                { 
-                    type: "text", 
-                    text: `Analyze this input image and generate a NEW high-quality image based on these instructions: "${userPrompt}". Return ONLY the image URL.` 
-                },
-                { 
-                    type: "image_url", 
-                    image_url: { url: imageBase64 } 
-                }
+                { type: "text", text },
+                { type: "image_url", image_url: { url: imageBase64 } }
             ]
         });
     } else {
-        // --- РЕЖИМ: ТОЛЬКО ТЕКСТ ---
-        // Используется для обычной генерации
-        messages.push({
-            role: "user",
-            content: `Generate a high-quality image of: "${userPrompt}". Return ONLY the URL.`
-        });
+        // Только для mode === 'gen' (фото по промту без референса)
+        const text = applyPrompt(PROMPT_GEN_TEXT, userPrompt);
+        messages.push({ role: "user", content: text });
     }
 
     return messages;
