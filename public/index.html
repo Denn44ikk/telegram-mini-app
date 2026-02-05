@@ -34,75 +34,54 @@
         .header h1 { margin: 0; font-size: 28px; }
         .header p { color: var(--hint-color); margin: 5px 0; font-size: 14px; }
 
-        /* МЕНЮ СЕТКА */
+        /* МЕНЮ */
         .menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         
-        /* Базовый стиль кнопок */
         .menu-btn {
-            background: var(--card-bg); 
-            border: none; 
-            border-radius: 18px; 
-            padding: 20px;
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            justify-content: center;
-            gap: 10px; 
-            color: var(--text-color); 
-            font-size: 14px; 
-            font-weight: 600;
-            cursor: pointer; 
-            transition: transform 0.1s; 
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            background: var(--card-bg); border: none; border-radius: 18px; padding: 20px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 10px; color: var(--text-color); font-size: 14px; font-weight: 600;
+            cursor: pointer; transition: transform 0.1s; box-shadow: 0 2px 5px rgba(0,0,0,0.05);
             height: 100px;
         }
         .menu-btn:active { transform: scale(0.98); }
         .menu-btn i { font-size: 24px; color: var(--button-color); }
         
-        /* СТИЛЬ ДЛЯ ГЛАВНЫХ КНОПОК (Во всю ширину) */
         .menu-btn.full-width {
-            grid-column: span 2; /* Растянуть на 2 колонки */
-            height: auto; /* Высота по содержимому */
-            padding: 30px 20px;
-            font-size: 18px; /* Текст крупнее */
-            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            color: #fff;
+            grid-column: span 2; height: auto; padding: 30px 20px;
+            font-size: 18px; text-shadow: 0 2px 4px rgba(0,0,0,0.2); color: #fff;
         }
 
-        /* 1. Теплый градиент (Фото по промту) */
-        .menu-btn.gradient-warm {
-            background: linear-gradient(135deg, #fce38a 0%, #f38181 100%);
-        }
+        .menu-btn.gradient-warm { background: linear-gradient(135deg, #fce38a 0%, #f38181 100%); }
         .menu-btn.gradient-warm i { color: #fff; font-size: 28px; margin-bottom: 5px; }
 
-        /* 2. Холодный градиент (Фотосессия) */
-        .menu-btn.gradient-cool {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
+        .menu-btn.gradient-cool { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
         .menu-btn.gradient-cool i { color: #fff; font-size: 28px; margin-bottom: 5px; }
 
 
-        /* INPUTS & UI */
+        /* UI ЭЛЕМЕНТЫ */
         .nav-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .icon-btn { background: none; border: none; color: var(--text-color); font-size: 22px; cursor: pointer; }
 
         .input-card { background: var(--card-bg); border-radius: 16px; padding: 15px; margin-bottom: 15px; }
         textarea { width: 100%; height: 80px; background: transparent; border: none; color: var(--text-color); font-size: 16px; resize: none; outline: none; }
 
-        /* UPLOAD STYLES */
         .mini-upload {
             display: flex; align-items: center; gap: 10px; margin-bottom: 15px;
             padding: 12px; border: 1px dashed var(--hint-color); border-radius: 12px;
             color: var(--hint-color); cursor: pointer; font-size: 14px; background: var(--card-bg);
+            transition: border 0.3s;
         }
-        .mini-upload:hover { background: rgba(0,0,0,0.03); }
+        .mini-upload.highlight { border-color: var(--button-color); background: rgba(51, 144, 236, 0.1); }
         .preview-thumb { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; display: none; }
 
         .upload-area {
             border: 2px dashed var(--button-color); border-radius: 16px; padding: 20px;
             text-align: center; color: var(--button-color); cursor: pointer; margin-bottom: 20px;
             display: block; background: var(--card-bg);
+            transition: background 0.3s;
         }
+        .upload-area.highlight { background: rgba(51, 144, 236, 0.1); }
         .upload-preview { max-width: 100%; max-height: 200px; border-radius: 10px; display: none; margin-top: 10px; }
 
         .result-placeholder {
@@ -118,7 +97,6 @@
             cursor: pointer; margin-top: auto;
         }
         
-        /* Баланс карточка */
         .balance-card {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white; padding: 25px; border-radius: 18px; text-align: center;
@@ -137,25 +115,18 @@
         </div>
         
         <div class="menu-grid">
-            <!-- Кнопка 1: Фото по промту (Теплый градиент, во всю ширину) -->
             <button class="menu-btn full-width gradient-warm" onclick="navTo('gen-screen')">
                 <i class="fa-solid fa-wand-magic-sparkles"></i>
                 <span>Фото по промту</span>
             </button>
-            
-            <!-- Кнопка 2: Фотосессия (Холодный градиент, во всю ширину) -->
             <button class="menu-btn full-width gradient-cool" onclick="navTo('product-screen')">
                 <i class="fa-solid fa-camera-retro"></i>
                 <span>Фотосессия с продуктом</span>
             </button>
-
-            <!-- Кнопка 3: Баланс (Половина) -->
             <button class="menu-btn" onclick="navTo('balance-screen')">
                 <i class="fa-solid fa-coins"></i>
                 <span>Баланс</span>
             </button>
-            
-            <!-- Кнопка 4: Настройки (Половина) -->
             <button class="menu-btn" onclick="tg.showAlert('Настройки пока недоступны')">
                 <i class="fa-solid fa-gear"></i>
                 <span>Настройки</span>
@@ -163,7 +134,7 @@
         </div>
     </div>
 
-    <!-- 2. ФОТО ПО ПРОМТУ (С возможностью прикрепить фото) -->
+    <!-- 2. ФОТО ПО ПРОМТУ -->
     <div id="gen-screen" class="screen">
         <div class="nav-bar">
             <button class="icon-btn" onclick="navTo('menu-screen')"><i class="fa-solid fa-arrow-left"></i></button>
@@ -172,14 +143,14 @@
         </div>
 
         <div class="input-card">
-            <textarea id="gen-prompt" placeholder="Опишите, что нарисовать...&#10;Например: Киберпанк город"></textarea>
+            <textarea id="gen-prompt" placeholder="Опишите, что нарисовать..."></textarea>
         </div>
 
-        <!-- Кнопка добавления фото-референса -->
-        <label class="mini-upload">
+        <!-- Мини-загрузчик + Поддержка вставки -->
+        <label id="gen-drop-zone" class="mini-upload">
             <input type="file" id="gen-file" accept="image/*" style="display:none" onchange="previewFile('gen-file', 'gen-preview')">
             <i class="fa-regular fa-image" style="font-size: 18px;"></i>
-            <span id="gen-file-text">Прикрепить референс (необяз.)</span>
+            <span id="gen-file-text">Прикрепить фото или Ctrl+V</span>
             <img id="gen-preview" class="preview-thumb">
         </label>
 
@@ -191,7 +162,7 @@
         <button id="btn-gen" class="main-btn" onclick="runGeneration('text')">Сгенерировать</button>
     </div>
 
-    <!-- 3. ФОТОСЕССИЯ ПРОДУКТА -->
+    <!-- 3. ФОТОСЕССИЯ -->
     <div id="product-screen" class="screen">
         <div class="nav-bar">
             <button class="icon-btn" onclick="navTo('menu-screen')"><i class="fa-solid fa-arrow-left"></i></button>
@@ -199,15 +170,15 @@
             <div style="width: 24px;"></div>
         </div>
 
-        <label class="upload-area">
+        <label id="product-drop-zone" class="upload-area">
             <input type="file" id="product-file" accept="image/*" style="display:none" onchange="previewFile('product-file', 'product-preview')">
             <i class="fa-solid fa-cloud-arrow-up" style="font-size: 30px; margin-bottom: 10px;"></i>
-            <div>Нажмите для загрузки продукта</div>
+            <div id="product-text">Загрузить или вставить (Ctrl+V)</div>
             <img id="product-preview" class="upload-preview" src="">
         </label>
 
         <div class="input-card">
-            <textarea id="product-prompt" placeholder="Опишите окружение (фон, свет, стиль)..."></textarea>
+            <textarea id="product-prompt" placeholder="Опишите окружение..."></textarea>
         </div>
 
         <div class="result-placeholder" id="product-result-area" style="min-height: 200px;">
@@ -225,23 +196,21 @@
             <h3>Кошелек</h3>
             <div style="width: 24px;"></div>
         </div>
-        
         <div class="balance-card">
             <div>Ваш баланс</div>
             <div class="balance-amount">0 BNB</div>
             <div style="font-size: 12px; opacity: 0.8;">Nano Banana Coins</div>
         </div>
-        
-        <div style="text-align: center; color: var(--hint-color); margin-top: 20px;">
-            История транзакций пуста
-        </div>
-        
-        <button class="main-btn" onclick="tg.showAlert('Скоро подключим платежку!')">Пополнить</button>
+        <div style="text-align: center; color: var(--hint-color); margin-top: 20px;">История пуста</div>
+        <button class="main-btn" onclick="tg.showAlert('Скоро!')">Пополнить</button>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.ready(); tg.expand();
+
+        // Хранилище для вставленных из буфера файлов
+        let pastedFiles = { gen: null, product: null };
 
         // --- НАВИГАЦИЯ ---
         function navTo(screenId) {
@@ -256,18 +225,72 @@
             }
         }
 
-        // --- ПРЕВЬЮ ---
+        // --- ВСТАВКА ИЗ БУФЕРА (PASTE) ---
+        window.addEventListener('paste', e => {
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            let blob = null;
+            
+            // Ищем картинку в буфере
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf("image") === 0) {
+                    blob = items[i].getAsFile();
+                    break;
+                }
+            }
+
+            if (blob) {
+                // Определяем, на каком мы экране
+                if (document.getElementById('gen-screen').classList.contains('active')) {
+                    handlePastedImage(blob, 'gen');
+                } else if (document.getElementById('product-screen').classList.contains('active')) {
+                    handlePastedImage(blob, 'product');
+                }
+            }
+        });
+
+        function handlePastedImage(file, type) {
+            // Сохраняем файл в переменную
+            pastedFiles[type] = file;
+
+            // Отображаем превью
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                if (type === 'gen') {
+                    const img = document.getElementById('gen-preview');
+                    img.src = e.target.result;
+                    img.style.display = 'block';
+                    document.getElementById('gen-file-text').innerText = "Фото из буфера!";
+                    document.getElementById('gen-drop-zone').classList.add('highlight');
+                    setTimeout(() => document.getElementById('gen-drop-zone').classList.remove('highlight'), 300);
+                } else {
+                    const img = document.getElementById('product-preview');
+                    img.src = e.target.result;
+                    img.style.display = 'block';
+                    document.getElementById('product-text').innerText = "Фото из буфера!";
+                    document.getElementById('product-drop-zone').classList.add('highlight');
+                    setTimeout(() => document.getElementById('product-drop-zone').classList.remove('highlight'), 300);
+                }
+            };
+            reader.readAsDataURL(file);
+            tg.HapticFeedback.notificationOccurred('selection');
+        }
+
+        // --- ОБЫЧНЫЙ ВЫБОР ФАЙЛА ---
         function previewFile(inputId, imgId) {
             const file = document.getElementById(inputId).files[0];
             if (file) {
+                // Если выбрали файл вручную, сбрасываем "вставленный" файл
+                if(inputId === 'gen-file') pastedFiles.gen = null;
+                if(inputId === 'product-file') pastedFiles.product = null;
+
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const img = document.getElementById(imgId);
                     img.src = e.target.result;
                     img.style.display = 'block';
-                    if(inputId === 'gen-file') {
-                        document.getElementById('gen-file-text').innerText = "Фото прикреплено!";
-                    }
+                    
+                    if(inputId === 'gen-file') document.getElementById('gen-file-text').innerText = "Фото выбрано";
+                    if(inputId === 'product-file') document.getElementById('product-text').innerText = "Фото выбрано";
                 };
                 reader.readAsDataURL(file);
             }
@@ -275,7 +298,7 @@
 
         // --- ГЕНЕРАЦИЯ ---
         async function runGeneration(type) {
-            let prompt, btn, imgRes, apiUrl, bodyData, fileInput;
+            let prompt, btn, imgRes, apiUrl, bodyData, fileInput, fileToSend;
             const loaderHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size: 24px;"></i>';
 
             if (type === 'text') {
@@ -285,12 +308,15 @@
                 imgRes = document.getElementById('gen-img');
                 apiUrl = '/api/generate';
                 
+                // Проверяем: либо файл в input, либо вставленный
+                fileToSend = fileInput.files[0] || pastedFiles.gen;
+
                 if (!prompt) return tg.showAlert('Введите текст!');
                 
                 bodyData = { prompt, initData: tg.initData };
-                if (fileInput.files[0]) {
-                    btn.innerText = "Загрузка...";
-                    bodyData.imageBase64 = await toBase64(fileInput.files[0]);
+                if (fileToSend) {
+                    btn.innerText = "Чтение...";
+                    bodyData.imageBase64 = await toBase64(fileToSend);
                 }
             } 
             else if (type === 'product') {
@@ -300,15 +326,17 @@
                 imgRes = document.getElementById('product-img');
                 apiUrl = '/api/product-gen';
                 
-                if (!fileInput.files[0]) return tg.showAlert('Выберите фото продукта!');
+                fileToSend = fileInput.files[0] || pastedFiles.product;
+
+                if (!fileToSend) return tg.showAlert('Нужно фото продукта!');
                 if (!prompt) return tg.showAlert('Опишите фон!');
 
-                btn.innerText = "Загрузка...";
-                const base64 = await toBase64(fileInput.files[0]);
+                btn.innerText = "Чтение...";
+                const base64 = await toBase64(fileToSend);
                 bodyData = { prompt, imageBase64: base64, initData: tg.initData };
             }
 
-            const originalText = btn.innerText === "Загрузка..." ? (type === 'text' ? "Сгенерировать" : "Обработать") : btn.innerText;
+            const originalText = type === 'text' ? "Сгенерировать" : "Обработать";
             btn.disabled = true;
             btn.innerHTML = loaderHTML;
             imgRes.style.display = 'none';
@@ -333,7 +361,7 @@
                 tg.showAlert('Ошибка сети');
             } finally {
                 btn.disabled = false;
-                btn.innerText = type === 'text' ? "Сгенерировать" : "Обработать";
+                btn.innerText = originalText;
             }
         }
 
