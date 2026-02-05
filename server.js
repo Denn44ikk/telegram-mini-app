@@ -85,6 +85,8 @@ async function callAI(prompt, imageBase64, mode) {
 }
 
 async function handleProductGeneration(req, res) {
+    // Генерация 5 фото может занять 2–3 мин — увеличиваем таймаут запроса (по умолчанию ~2 мин)
+    res.setTimeout(300000);
     const { prompt, initData, imageBase64 } = req.body;
     const modelId = getModelId();
     debugLog('1. PRODUCT ЗАПРОС', { prompt, hasImage: !!imageBase64, model: modelId, count: 5 });
@@ -116,7 +118,11 @@ async function handleProductGeneration(req, res) {
             sentToChat = await sendMediaGroupToTelegram(chatId, imageUrls, prompt);
         }
 
-        res.json({ imageUrls, sentToChat });
+        // Не отправляем тяжёлые base64 в ответ — иначе 10–20 МБ рвут соединение и клиент показывает «Сервер не отвечает»
+        if (sentToChat) {
+            return res.json({ imageUrls: [], sentToChat: true });
+        }
+        res.json({ imageUrls, sentToChat: false });
     } catch (error) {
         debugLog('PRODUCT ОШИБКА', error.message);
         if (chatId) await sendText(chatId, `❌ Error: ${error.message.substring(0, 200)}`);
