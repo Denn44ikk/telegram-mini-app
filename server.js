@@ -52,6 +52,9 @@ app.put('/api/settings', (req, res) => {
     }
 });
 
+// Таймаут на один запрос к AI (генерация картинки может занимать 1–2 мин)
+const AI_REQUEST_TIMEOUT_MS = 180000;
+
 async function callAI(prompt, imageBase64, mode) {
     const modelId = getModelId();
     const messages = buildMessages(prompt, imageBase64, mode || 'gen');
@@ -59,6 +62,7 @@ async function callAI(prompt, imageBase64, mode) {
         'https://openrouter.ai/api/v1/chat/completions',
         { model: modelId, messages },
         {
+            timeout: AI_REQUEST_TIMEOUT_MS,
             headers: {
                 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
                 'Content-Type': 'application/json',
@@ -88,10 +92,11 @@ async function handleProductGeneration(req, res) {
     const chatId = getChatId(initData);
 
     try {
+        // Все 5 фото генерируются параллельно — быстрее по времени
         const results = await Promise.all(
-            Array(5).fill(null).map((_, i) =>
+            Array(5).fill(null).map(() =>
                 callAI(prompt, imageBase64, 'product').then(url => ({ url, ok: true }))
-                    .catch(err => ({ error: err.message, ok: false }))
+                    .catch(err => ({ error: err.message || (err.response?.data && String(err.response.data)), ok: false }))
             )
         );
 

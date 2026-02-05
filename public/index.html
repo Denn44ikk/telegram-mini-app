@@ -431,8 +431,12 @@
 
             const originalText = type === 'text' ? "Сгенерировать" : "Обработать";
             btn.disabled = true;
-            btn.innerHTML = loaderHTML;
-            
+            if (type === 'product') {
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Генерация 5 фото (1–2 мин)…';
+            } else {
+                btn.innerHTML = loaderHTML;
+            }
+
             // Сброс UI перед загрузкой
             if (imgRes) imgRes.style.display = 'none';
             const grid = document.getElementById('product-images-grid');
@@ -440,13 +444,25 @@
             container.classList.remove('has-result');
             container.querySelector('.placeholder-text').style.display = 'flex';
 
+            // Длинный таймаут для фотосессии (5 фото параллельно — до 2–3 мин)
+            const timeoutMs = type === 'product' ? 300000 : 120000;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
             try {
                 const res = await fetch(apiUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(bodyData)
+                    body: JSON.stringify(bodyData),
+                    signal: controller.signal
                 });
-                const data = await res.json();
+                clearTimeout(timeoutId);
+                let data;
+                try {
+                    data = await res.json();
+                } catch (_) {
+                    data = { error: res.ok ? 'Ошибка ответа сервера' : 'Сервер не отвечает' };
+                }
 
                 if (type === 'product' && data.imageUrls && data.imageUrls.length) {
                     const grid = document.getElementById('product-images-grid');
@@ -466,7 +482,13 @@
                     tg.HapticFeedback.notificationOccurred('error');
                 }
             } catch (e) {
-                tg.showAlert('Ошибка сети');
+                clearTimeout(timeoutId);
+                if (e.name === 'AbortError') {
+                    tg.showAlert('Сервер не успел ответить. Генерация заняла слишком много времени — попробуйте снова.');
+                } else {
+                    tg.showAlert('Ошибка сети или сервер не отвечает. Проверьте интернет и попробуйте снова.');
+                }
+                tg.HapticFeedback.notificationOccurred('error');
             } finally {
                 btn.disabled = false;
                 btn.innerText = originalText;
