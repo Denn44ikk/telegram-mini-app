@@ -75,9 +75,8 @@ async function handleGeneration(req, res) {
 
         debugLog('4. TEXT CONTENT', content);
 
-        // --- ЛОГИКА ПОИСКА КАРТИНКИ (ОБНОВЛЕННАЯ) ---
+        // --- ПОИСК КАРТИНКИ ---
         
-        // 1. Ищем в тексте (Markdown или просто ссылка)
         const base64Match = content.match(/(data:image\/[a-zA-Z]*;base64,[^\s"\)]+)/);
         const urlMatch = content.match(/(https?:\/\/[^\s\)]+)/);
 
@@ -89,16 +88,12 @@ async function handleGeneration(req, res) {
             imageUrl = urlMatch[1];
             debugLog('5. РЕЗУЛЬТАТ', `✅ Нашли ссылку в тексте: ${imageUrl}`);
         } 
-        // 2. Ищем в специальном массиве images (ДЛЯ GEMINI ВАЖНО!)
         else if (choice?.images?.length) {
             const imgObj = choice.images[0];
-            
-            // Вариант А: Стандартный
             if (imgObj.url) {
                 imageUrl = imgObj.url;
                 debugLog('5. РЕЗУЛЬТАТ', '✅ Нашли ссылку в images[0].url');
             } 
-            // Вариант Б: Специфичный для Gemini (как в твоих логах)
             else if (imgObj.image_url && imgObj.image_url.url) {
                 imageUrl = imgObj.image_url.url;
                 debugLog('5. РЕЗУЛЬТАТ', '✅ Нашли ссылку в images[0].image_url.url');
@@ -153,7 +148,16 @@ async function sendToTelegram(chatId, resource, caption, isDocument) {
     try {
         const form = new FormData();
         form.append('chat_id', chatId);
-        form.append('caption', caption ?🎨 Ваш арт: "${caption}": '🎨 Ваш арт');
+
+        // --- ВОТ ТУТ ИСПРАВЛЕНИЕ ЗАГОЛОВКА ---
+        // Формируем красивую подпись с промптом
+        const finalCaption = caption 
+            ? `🎨 Ваш арт: "${caption}"` 
+            : '🎨 Ваш арт';
+            
+        // Обрезаем до 1000 символов (лимит ТГ для подписей к медиа)
+        form.append('caption', finalCaption.substring(0, 1000));
+        // -------------------------------------
 
         const isUrl = resource.startsWith('http');
         const isData = resource.startsWith('data:');
@@ -163,7 +167,7 @@ async function sendToTelegram(chatId, resource, caption, isDocument) {
             try {
                 const stream = await axios.get(resource, { 
                     responseType: 'stream',
-                    timeout: 20000, // Увеличил тайм-аут
+                    timeout: 20000, 
                     headers: { 'User-Agent': 'Mozilla/5.0' }
                 });
                 form.append(isDocument ? 'document' : 'photo', stream.data, { filename: 'gen.png' });
