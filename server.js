@@ -6,13 +6,11 @@ const path = require('path');
 const axios = require('axios');
 const FormData = require('form-data');
 
-// Подключаем промпты
 const { buildMessages } = require('./prompts');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-// Читаем модель из .env (или используем дефолтную, если забыли прописать)
 const MODEL_ID = process.env.MODEL_ID || 'google/gemini-2.0-flash-001';
 
 const publicPath = path.join(__dirname, 'public');
@@ -22,7 +20,7 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' })); 
 app.use(express.static(publicPath));
 
-// === МОЩНЫЙ ЛОГГЕР ДЛЯ ДЕБАГА ===
+// === ДЕБАГ ЛОГГЕР ===
 function debugLog(stepName, data) {
     const time = new Date().toLocaleTimeString('ru-RU');
     console.log(`\n🔻🔻🔻 [${time}] --- STEP: ${stepName} --- 🔻🔻🔻`);
@@ -32,7 +30,7 @@ function debugLog(stepName, data) {
         try {
             console.log(JSON.stringify(data, null, 2));
         } catch (e) {
-            console.log('[Невозможно отобразить объект JSON]', data);
+            console.log('[JSON Error]', data);
         }
     }
     console.log(`🔺🔺🔺 ----------------------------------------- 🔺🔺🔺\n`);
@@ -45,28 +43,19 @@ app.post('/api/product-gen', async (req, res) => handleGeneration(req, res));
 async function handleGeneration(req, res) {
     const { prompt, initData, imageBase64 } = req.body;
     
-    // 1. ЛОГИРУЕМ ЗАПРОС
-    debugLog('1. ПОЛУЧЕН ЗАПРОС', {
-        prompt: prompt,
-        hasImage: !!imageBase64,
-        usingModel: MODEL_ID // Показываем, какая модель сейчас активна
-    });
+    debugLog('1. ЗАПРОС', { prompt, hasImage: !!imageBase64, model: MODEL_ID });
 
     let chatId = getChatId(initData);
 
     try {
         const messages = buildMessages(prompt, imageBase64);
         
-        // 2. ОТПРАВЛЯЕМ В OPENROUTER
-        debugLog('2. ОТПРАВЛЯЕМ В AI', {
-            model: MODEL_ID,
-            messages_count: messages.length
-        });
+        debugLog('2. ОТПРАВКА В AI', { model: MODEL_ID, msg_count: messages.length });
 
         const response = await axios.post(
             'https://openrouter.ai/api/v1/chat/completions',
             {
-                model: MODEL_ID, // <-- ТЕПЕРЬ БЕРЕТСЯ ИЗ ПЕРЕМЕННОЙ
+                model: MODEL_ID,
                 messages: messages,
             },
             {
@@ -78,36 +67,47 @@ async function handleGeneration(req, res) {
             }
         );
 
-        // 3. ПОЛНЫЙ ОТВЕТ ОТ НЕЙРОСЕТИ
-        debugLog('3. ПОЛНЫЙ ОТВЕТ (RAW)', response.data);
+        debugLog('3. ОТВЕТ (RAW)', response.data);
 
         let imageUrl = null;
         const choice = response.data.choices?.[0]?.message;
         const content = choice?.content || "";
 
-        // 4. ТЕКСТОВОЕ СОДЕРЖИМОЕ
-        debugLog('4. ТЕКСТ CONTENT', content);
+        debugLog('4. TEXT CONTENT', content);
 
-        // Поиск BASE64
+        // --- ЛОГИКА ПОИСКА КАРТИНКИ (ОБНОВЛЕННАЯ) ---
+        
+        // 1. Ищем в тексте (Markdown или просто ссылка)
         const base64Match = content.match(/(data:image\/[a-zA-Z]*;base64,[^\s"\)]+)/);
-        // Поиск URL
         const urlMatch = content.match(/(https?:\/\/[^\s\)]+)/);
 
         if (base64Match) {
             imageUrl = base64Match[1];
-            debugLog('5. РЕЗУЛЬТАТ', '✅ Нашли BASE64 код');
-        } else if (urlMatch) {
+            debugLog('5. РЕЗУЛЬТАТ', '✅ Нашли Base64 в тексте');
+        } 
+        else if (urlMatch) {
             imageUrl = urlMatch[1];
-            debugLog('5. РЕЗУЛЬТАТ', `✅ Нашли ссылку: ${imageUrl}`);
-        } else if (choice?.images?.length) {
-            imageUrl = choice.images[0].url;
-            debugLog('5. РЕЗУЛЬТАТ', `✅ Нашли ссылку в массиве images: ${imageUrl}`);
-        } else {
-            debugLog('5. РЕЗУЛЬТАТ', '❌ Картинка не найдена.');
+            debugLog('5. РЕЗУЛЬТАТ', `✅ Нашли ссылку в тексте: ${imageUrl}`);
+        } 
+        // 2. Ищем в специальном массиве images (ДЛЯ GEMINI ВАЖНО!)
+        else if (choice?.images?.length) {
+            const imgObj = choice.images[0];
+            
+            // Вариант А: Стандартный
+            if (imgObj.url) {
+                imageUrl = imgObj.url;
+                debugLog('5. РЕЗУЛЬТАТ', '✅ Нашли ссылку в images[0].url');
+            } 
+            // Вариант Б: Специфичный для Gemini (как в твоих логах)
+            else if (imgObj.image_url && imgObj.image_url.url) {
+                imageUrl = imgObj.image_url.url;
+                debugLog('5. РЕЗУЛЬТАТ', '✅ Нашли ссылку в images[0].image_url.url');
+            }
         }
 
         if (!imageUrl) {
-            throw new Error('В ответе нейросети нет ссылки или кода картинки.');
+            debugLog('5. РЕЗУЛЬТАТ', '❌ Картинка не найдена нигде.');
+            throw new Error('AI не вернул картинку (пустой ответ).');
         }
 
         // Отправка в ТГ
@@ -120,12 +120,12 @@ async function handleGeneration(req, res) {
 
     } catch (error) {
         debugLog('6. ОШИБКА', error.response?.data || error.message);
-        if (chatId) await sendText(chatId, `❌ ERROR (${MODEL_ID}):\n${error.message.substring(0, 200)}`);
+        if (chatId) await sendText(chatId, `❌ Error:\n${error.message.substring(0, 200)}`);
         res.json({ error: 'Ошибка генерации', details: error.message });
     }
 }
 
-app.post('/api/send-file', async (req, res) => { res.json({success: false, error: "Use Pro version"}); });
+app.post('/api/send-file', async (req, res) => { res.json({success: false}); });
 
 // === ФУНКЦИИ ===
 
@@ -159,21 +159,21 @@ async function sendToTelegram(chatId, resource, caption, isDocument) {
         const isData = resource.startsWith('data:');
 
         if (isUrl) {
-            debugLog('TELEGRAM', `Скачиваю ссылку: ${resource}`);
+            debugLog('TELEGRAM', `Скачиваю: ${resource.substring(0, 30)}...`);
             try {
                 const stream = await axios.get(resource, { 
                     responseType: 'stream',
-                    timeout: 15000,
+                    timeout: 20000, // Увеличил тайм-аут
                     headers: { 'User-Agent': 'Mozilla/5.0' }
                 });
                 form.append(isDocument ? 'document' : 'photo', stream.data, { filename: 'gen.png' });
             } catch (e) {
                 debugLog('DOWNLOAD ERROR', e.message);
-                throw new Error(`Не удалось скачать файл: ${resource}`);
+                throw new Error('Не удалось скачать файл');
             }
         } 
         else if (isData) {
-            debugLog('TELEGRAM', 'Отправляю Base64...');
+            debugLog('TELEGRAM', 'Обрабатываю Base64...');
             let base64Data = resource.split(';base64,').pop();
             base64Data = fixBase64(base64Data);
             const buffer = Buffer.from(base64Data, 'base64');
@@ -182,14 +182,14 @@ async function sendToTelegram(chatId, resource, caption, isDocument) {
 
         const method = isDocument ? 'sendDocument' : 'sendPhoto';
         await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/${method}`, form, { headers: form.getHeaders() });
-        debugLog('TELEGRAM', '✅ Успешно отправлено!');
+        debugLog('TELEGRAM', '✅ Отправлено!');
         return true;
 
     } catch (e) {
-        debugLog('TELEGRAM FINAL ERROR', e.response?.data || e.message);
+        debugLog('TELEGRAM ERROR', e.response?.data || e.message);
         return false;
     }
 }
 
 app.get('/', (req, res) => res.sendFile(indexPath));
-app.listen(PORT, () => console.log(`🚀 DEBUG SERVER STARTED using model: ${MODEL_ID}`));
+app.listen(PORT, () => console.log(`🚀 SERVER READY: ${MODEL_ID}`));
