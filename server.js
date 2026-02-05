@@ -153,7 +153,7 @@ async function sendToTelegram(chatId, resource, caption, isDocument) {
     try {
         const form = new FormData();
         form.append('chat_id', chatId);
-        form.append('caption', 'BananaGen Art');
+        form.append('caption', caption ?🎨 Ваш арт: "${caption}": '🎨 Ваш арт');
 
         const isUrl = resource.startsWith('http');
         const isData = resource.startsWith('data:');
