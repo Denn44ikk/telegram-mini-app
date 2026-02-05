@@ -17,10 +17,11 @@ const publicPath = path.join(__dirname, 'public');
 const indexPath = path.join(publicPath, 'index.html');
 
 app.use(cors());
+// Важно: лимит 50mb, так как base64 в тексте занимают много места
 app.use(bodyParser.json({ limit: '50mb' })); 
 app.use(express.static(publicPath));
 
-// --- БЕЗОПАСНЫЙ ЛОГГЕР ---
+// --- ЛОГГЕР ---
 function log(message, data = null) {
     const time = new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
     console.log(`[${time}] ${message}`);
@@ -28,14 +29,13 @@ function log(message, data = null) {
 }
 
 // === API ENDPOINTS ===
-
 app.post('/api/generate', async (req, res) => handleGeneration(req, res));
 app.post('/api/product-gen', async (req, res) => handleGeneration(req, res));
 
 async function handleGeneration(req, res) {
     const { prompt, initData, imageBase64 } = req.body;
     
-    log(`🎨 Запрос Nano Banana Pro. Промпт: "${prompt ? prompt.substring(0, 30) : '...'}"`);
+    log(`🎨 Промпт: "${prompt ? prompt.substring(0, 30) : '...'}"`);
 
     let chatId = getChatId(initData);
 
@@ -58,44 +58,58 @@ async function handleGeneration(req, res) {
         );
 
         let imageUrl = null;
+        let isBase64 = false;
         const choice = response.data.choices?.[0]?.message;
+        const content = choice?.content || "";
+
+        // 1. Сначала ищем BASE64 (data:image/png;base64,...)
+        // Нейросеть может выдать его в markdown: ![img](data:...) или просто текстом
+        const base64Match = content.match(/(data:image\/[a-zA-Z]*;base64,[^\s"\)]+)/);
         
-        // Поиск ссылки
-        if (choice?.content) {
-             const mdMatch = choice.content.match(/!\[.*?\]\((https?:\/\/[^\)]+)\)/);
-             if (mdMatch) imageUrl = mdMatch[1];
-             else {
-                 const urlMatch = choice.content.match(/(https?:\/\/[^\s\)]+)/);
-                 if (urlMatch) imageUrl = urlMatch[1];
+        if (base64Match) {
+            imageUrl = base64Match[1];
+            isBase64 = true;
+            log('✅ Найдена Base64 картинка в ответе!');
+        } 
+        // 2. Если Base64 нет, ищем обычную ССЫЛКУ (http)
+        else {
+             const urlMatch = content.match(/(https?:\/\/[^\s\)]+)/);
+             if (urlMatch) {
+                 imageUrl = urlMatch[1];
+                 isBase64 = false;
+                 log('✅ Найдена ссылка на картинку');
+             } else if (choice?.images?.length) {
+                 imageUrl = choice.images[0].url;
+                 isBase64 = false;
              }
         }
-        if (!imageUrl && choice?.images?.length) imageUrl = choice.images[0].url;
 
         if (!imageUrl) {
-            log('⚠️ AI ответил без ссылки.');
-            throw new Error('AI не вернул ссылку');
+            log('⚠️ Ответ без картинки/ссылки. Текст:', content.substring(0, 100));
+            throw new Error('AI не вернул ни ссылку, ни Base64.');
         }
-
-        log(`✅ Ссылка получена!`);
 
         // Отправка в ТГ
         let sentToChat = false;
         if (chatId) {
-            sentToChat = await sendToTelegram(chatId, imageUrl, prompt || 'Banana Art', false);
+            // Передаем флаг isBase64, чтобы функция знала, что делать
+            sentToChat = await sendToTelegram(chatId, imageUrl, prompt || 'Banana Art', true, 'gen_image.png');
         }
 
-        res.json({ imageUrl, sentToChat });
+        // Если это base64, он может быть гигантским, не отправляем его обратно во фронтенд целиком, если не просили
+        // Но фронтенду нужно показать превью.
+        res.json({ imageUrl: imageUrl, sentToChat });
 
     } catch (error) {
-        log('❌ Ошибка выполнения:', error.message);
+        log('❌ Ошибка:', error.message);
+        if (chatId) await sendText(chatId, `❌ Ошибка: ${error.message}`);
         res.json({ error: 'Ошибка генерации', details: error.message });
     }
 }
 
-app.post('/api/send-file', async (req, res) => { res.json({success: false, error: "Not implemented"}); });
+app.post('/api/send-file', async (req, res) => { res.json({success: false, error: "Use Pro version"}); });
 
-
-// === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
+// === ФУНКЦИИ ===
 
 function getChatId(initData) {
     try {
@@ -111,45 +125,53 @@ function fixBase64(str) {
     return str;
 }
 
+async function sendText(chatId, text) {
+    try {
+        await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, { chat_id: chatId, text: text });
+    } catch (e) {}
+}
+
 async function sendToTelegram(chatId, resource, caption, isDocument, fileName = 'image.png') {
     try {
         const form = new FormData();
         form.append('chat_id', chatId);
         form.append('caption', caption ? caption.substring(0, 1000) : 'BananaGen');
 
-        // ВАРИАНТ 1: URL
-        if (resource.startsWith('http')) {
+        // ЛОГИКА ОПРЕДЕЛЕНИЯ ТИПА
+        const isUrl = resource.startsWith('http');
+        const isData = resource.startsWith('data:');
+
+        if (isUrl) {
+            // ЭТО ССЫЛКА -> СКАЧИВАЕМ
+            log('⏳ Скачиваю по ссылке...');
             try {
-                // Скачиваем, притворяясь браузером (User-Agent)
                 const stream = await axios.get(resource, { 
                     responseType: 'stream',
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                    }
+                    timeout: 15000,
+                    headers: { 'User-Agent': 'Mozilla/5.0' }
                 });
                 form.append(isDocument ? 'document' : 'photo', stream.data, { filename: fileName });
-            } catch (streamError) {
-                log('⚠️ Ошибка скачивания, пробуем отправить ссылку напрямую...');
-                // План Б: Просто кидаем ссылку
-                await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/sendPhoto`, {
-                    chat_id: chatId,
-                    photo: resource,
-                    caption: caption
-                });
-                return true;
+            } catch (e) {
+                log('⚠️ Ссылка недоступна, отправляю как текст');
+                await sendText(chatId, `Картинка создана, но ссылка недоступна: ${resource}`);
+                return false;
             }
         } 
-        // ВАРИАНТ 2: Base64
-        else if (resource.startsWith('data:')) {
+        else if (isData) {
+            // ЭТО BASE64 -> ПРОСТО КОНВЕРТИРУЕМ (БЕЗ СКАЧИВАНИЯ)
+            log('⚙️ Обрабатываю Base64...');
+            
+            // Очищаем от заголовка "data:image/png;base64,"
             let base64Data = resource.split(';base64,').pop();
             base64Data = fixBase64(base64Data);
+            
             const buffer = Buffer.from(base64Data, 'base64');
             form.append('document', buffer, { filename: fileName });
         }
 
         const method = isDocument ? 'sendDocument' : 'sendPhoto';
         await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/${method}`, form, { headers: form.getHeaders() });
-        log('📨 Отправлено в Telegram');
+        log('📨 Картинка отправлена в ТГ!');
         return true;
 
     } catch (e) {
@@ -159,4 +181,4 @@ async function sendToTelegram(chatId, resource, caption, isDocument, fileName = 
 }
 
 app.get('/', (req, res) => res.sendFile(indexPath));
-app.listen(PORT, () => log(`🚀 Nano Banana Pro запущен на порту ${PORT}`));
+app.listen(PORT, () => log(`🚀 Server running on port ${PORT}`));
