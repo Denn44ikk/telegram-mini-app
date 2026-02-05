@@ -12,6 +12,8 @@ const { buildMessages } = require('./prompts');
 const app = express();
 const PORT = process.env.PORT || 4000;
 const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+// Читаем модель из .env (или используем дефолтную, если забыли прописать)
+const MODEL_ID = process.env.MODEL_ID || 'google/gemini-2.0-flash-001';
 
 const publicPath = path.join(__dirname, 'public');
 const indexPath = path.join(publicPath, 'index.html');
@@ -43,29 +45,28 @@ app.post('/api/product-gen', async (req, res) => handleGeneration(req, res));
 async function handleGeneration(req, res) {
     const { prompt, initData, imageBase64 } = req.body;
     
-    // 1. ЛОГИРУЕМ ЗАПРОС ОТ КЛИЕНТА
-    debugLog('1. ПОЛУЧЕН ЗАПРОС ОТ БРАУЗЕРА', {
+    // 1. ЛОГИРУЕМ ЗАПРОС
+    debugLog('1. ПОЛУЧЕН ЗАПРОС', {
         prompt: prompt,
         hasImage: !!imageBase64,
-        imageLength: imageBase64 ? imageBase64.length : 0
+        usingModel: MODEL_ID // Показываем, какая модель сейчас активна
     });
 
     let chatId = getChatId(initData);
 
     try {
-        // 2. ЛОГИРУЕМ СООБЩЕНИЯ ДЛЯ НЕЙРОСЕТИ
         const messages = buildMessages(prompt, imageBase64);
-        debugLog('2. ОТПРАВЛЯЕМ В OPENROUTER', {
-            model: 'google/gemini-2.0-flash-001',
-            messages_count: messages.length,
-            system_prompt: messages[0].content, // Покажем системный промпт
-            user_prompt: messages[messages.length-1].content // И промпт юзера
+        
+        // 2. ОТПРАВЛЯЕМ В OPENROUTER
+        debugLog('2. ОТПРАВЛЯЕМ В AI', {
+            model: MODEL_ID,
+            messages_count: messages.length
         });
 
         const response = await axios.post(
             'https://openrouter.ai/api/v1/chat/completions',
             {
-                model: 'google/gemini-2.0-flash-001', 
+                model: MODEL_ID, // <-- ТЕПЕРЬ БЕРЕТСЯ ИЗ ПЕРЕМЕННОЙ
                 messages: messages,
             },
             {
@@ -77,43 +78,36 @@ async function handleGeneration(req, res) {
             }
         );
 
-        // 3. САМОЕ ВАЖНОЕ: ПОЛНЫЙ ОТВЕТ ОТ НЕЙРОСЕТИ
-        debugLog('3. ПОЛНЫЙ ОТВЕТ ОТ OPENROUTER (RAW)', response.data);
+        // 3. ПОЛНЫЙ ОТВЕТ ОТ НЕЙРОСЕТИ
+        debugLog('3. ПОЛНЫЙ ОТВЕТ (RAW)', response.data);
 
         let imageUrl = null;
-        let isBase64 = false;
-        
         const choice = response.data.choices?.[0]?.message;
         const content = choice?.content || "";
 
-        // 4. ЛОГИРУЕМ ТОЛЬКО ТЕКСТОВОЕ СОДЕРЖИМОЕ
-        debugLog('4. ТЕКСТОВОЕ ПОЛЕ CONTENT', content);
+        // 4. ТЕКСТОВОЕ СОДЕРЖИМОЕ
+        debugLog('4. ТЕКСТ CONTENT', content);
 
         // Поиск BASE64
         const base64Match = content.match(/(data:image\/[a-zA-Z]*;base64,[^\s"\)]+)/);
-        
         // Поиск URL
         const urlMatch = content.match(/(https?:\/\/[^\s\)]+)/);
 
         if (base64Match) {
             imageUrl = base64Match[1];
-            isBase64 = true;
-            debugLog('5. РЕЗУЛЬТАТ ПОИСКА', '✅ Нашли BASE64 код внутри текста');
+            debugLog('5. РЕЗУЛЬТАТ', '✅ Нашли BASE64 код');
         } else if (urlMatch) {
             imageUrl = urlMatch[1];
-            isBase64 = false;
-            debugLog('5. РЕЗУЛЬТАТ ПОИСКА', `✅ Нашли ссылку: ${imageUrl}`);
+            debugLog('5. РЕЗУЛЬТАТ', `✅ Нашли ссылку: ${imageUrl}`);
         } else if (choice?.images?.length) {
-            // Иногда картинки лежат в отдельном массиве (если это нативная генерация)
             imageUrl = choice.images[0].url;
-            isBase64 = false;
-            debugLog('5. РЕЗУЛЬТАТ ПОИСКА', `✅ Нашли ссылку в массиве images: ${imageUrl}`);
+            debugLog('5. РЕЗУЛЬТАТ', `✅ Нашли ссылку в массиве images: ${imageUrl}`);
         } else {
-            debugLog('5. РЕЗУЛЬТАТ ПОИСКА', '❌ Ничего похожего на картинку не найдено.');
+            debugLog('5. РЕЗУЛЬТАТ', '❌ Картинка не найдена.');
         }
 
         if (!imageUrl) {
-            throw new Error('В ответе нейросети нет ни ссылки, ни Base64 кода.');
+            throw new Error('В ответе нейросети нет ссылки или кода картинки.');
         }
 
         // Отправка в ТГ
@@ -125,11 +119,8 @@ async function handleGeneration(req, res) {
         res.json({ imageUrl: imageUrl, sentToChat });
 
     } catch (error) {
-        // 6. ЛОГИРУЕМ ОШИБКУ
-        debugLog('6. ОШИБКА В ПРОЦЕССЕ', error.response?.data || error.message);
-        
-        if (chatId) await sendText(chatId, `❌ DEBUG ERROR:\n${error.message.substring(0, 200)}`);
-        
+        debugLog('6. ОШИБКА', error.response?.data || error.message);
+        if (chatId) await sendText(chatId, `❌ ERROR (${MODEL_ID}):\n${error.message.substring(0, 200)}`);
         res.json({ error: 'Ошибка генерации', details: error.message });
     }
 }
@@ -162,27 +153,27 @@ async function sendToTelegram(chatId, resource, caption, isDocument) {
     try {
         const form = new FormData();
         form.append('chat_id', chatId);
-        form.append('caption', 'BananaGen Debug Result');
+        form.append('caption', 'BananaGen Art');
 
         const isUrl = resource.startsWith('http');
         const isData = resource.startsWith('data:');
 
         if (isUrl) {
-            debugLog('TELEGRAM', `Пытаюсь скачать и отправить ссылку: ${resource}`);
+            debugLog('TELEGRAM', `Скачиваю ссылку: ${resource}`);
             try {
                 const stream = await axios.get(resource, { 
                     responseType: 'stream',
-                    timeout: 10000,
+                    timeout: 15000,
                     headers: { 'User-Agent': 'Mozilla/5.0' }
                 });
                 form.append(isDocument ? 'document' : 'photo', stream.data, { filename: 'gen.png' });
             } catch (e) {
-                debugLog('TELEGRAM DOWNLOAD ERROR', e.message);
-                throw new Error(`Не удалось скачать файл по ссылке: ${resource}`);
+                debugLog('DOWNLOAD ERROR', e.message);
+                throw new Error(`Не удалось скачать файл: ${resource}`);
             }
         } 
         else if (isData) {
-            debugLog('TELEGRAM', 'Отправляю Base64 данные...');
+            debugLog('TELEGRAM', 'Отправляю Base64...');
             let base64Data = resource.split(';base64,').pop();
             base64Data = fixBase64(base64Data);
             const buffer = Buffer.from(base64Data, 'base64');
@@ -201,4 +192,4 @@ async function sendToTelegram(chatId, resource, caption, isDocument) {
 }
 
 app.get('/', (req, res) => res.sendFile(indexPath));
-app.listen(PORT, () => console.log(`🚀 DEBUG SERVER STARTED on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 DEBUG SERVER STARTED using model: ${MODEL_ID}`));
