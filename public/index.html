@@ -58,8 +58,7 @@
         .menu-btn.gradient-cool { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
         .menu-btn.gradient-cool i { color: #fff; font-size: 28px; margin-bottom: 5px; }
 
-
-        /* UI ЭЛЕМЕНТЫ */
+        /* UI */
         .nav-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .icon-btn { background: none; border: none; color: var(--text-color); font-size: 22px; cursor: pointer; }
 
@@ -84,12 +83,35 @@
         .upload-area.highlight { background: rgba(51, 144, 236, 0.1); }
         .upload-preview { max-width: 100%; max-height: 200px; border-radius: 10px; display: none; margin-top: 10px; }
 
+        /* ИСПРАВЛЕННЫЙ БЛОК РЕЗУЛЬТАТА */
         .result-placeholder {
-            min-height: 250px; border: 2px dashed var(--hint-color); border-radius: 16px;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            color: var(--hint-color); background: var(--card-bg); margin-bottom: 15px;
+            min-height: 250px; 
+            border: 2px dashed var(--hint-color); 
+            border-radius: 16px;
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center;
+            color: var(--hint-color); 
+            background: var(--card-bg); 
+            margin-bottom: 15px;
+            overflow: hidden; /* Чтобы картинка не вылезала */
+            position: relative;
+            transition: all 0.3s;
         }
-        .result-placeholder img { width: 100%; border-radius: 14px; display: none; }
+        /* Когда картинка готова, убираем рамку и отступы */
+        .result-placeholder.has-result {
+            border: none;
+            background: transparent;
+            min-height: auto;
+        }
+        
+        .result-placeholder img { 
+            width: 100%; 
+            border-radius: 16px; 
+            display: none; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
 
         .main-btn {
             width: 100%; background-color: var(--button-color); color: var(--button-text);
@@ -113,7 +135,6 @@
             <h1>🍌 Nano Banana</h1>
             <p>Creative AI Suite</p>
         </div>
-        
         <div class="menu-grid">
             <button class="menu-btn full-width gradient-warm" onclick="navTo('gen-screen')">
                 <i class="fa-solid fa-wand-magic-sparkles"></i>
@@ -146,7 +167,6 @@
             <textarea id="gen-prompt" placeholder="Опишите, что нарисовать..."></textarea>
         </div>
 
-        <!-- Мини-загрузчик + Поддержка вставки -->
         <label id="gen-drop-zone" class="mini-upload">
             <input type="file" id="gen-file" accept="image/*" style="display:none" onchange="previewFile('gen-file', 'gen-preview')">
             <i class="fa-regular fa-image" style="font-size: 18px;"></i>
@@ -155,7 +175,11 @@
         </label>
 
         <div class="result-placeholder" id="gen-result-area">
-            <div class="placeholder-text"><i class="fa-regular fa-image" style="font-size: 24px;"></i><p>Результат</p></div>
+            <!-- Добавил класс placeholder-text, чтобы скрывать его -->
+            <div class="placeholder-text" style="display:flex; flex-direction:column; align-items:center;">
+                <i class="fa-regular fa-image" style="font-size: 24px;"></i>
+                <p>Результат</p>
+            </div>
             <img id="gen-img" src="">
         </div>
         
@@ -182,7 +206,10 @@
         </div>
 
         <div class="result-placeholder" id="product-result-area" style="min-height: 200px;">
-            <div class="placeholder-text"><p>Результат</p></div>
+             <!-- Добавил класс placeholder-text -->
+            <div class="placeholder-text" style="display:flex; flex-direction:column; align-items:center;">
+                <p>Результат</p>
+            </div>
             <img id="product-img" src="">
         </div>
 
@@ -209,14 +236,11 @@
         const tg = window.Telegram.WebApp;
         tg.ready(); tg.expand();
 
-        // Хранилище для вставленных из буфера файлов
         let pastedFiles = { gen: null, product: null };
 
-        // --- НАВИГАЦИЯ ---
         function navTo(screenId) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
             document.getElementById(screenId).classList.add('active');
-            
             if(screenId === 'menu-screen') {
                 tg.BackButton.hide();
             } else {
@@ -225,21 +249,16 @@
             }
         }
 
-        // --- ВСТАВКА ИЗ БУФЕРА (PASTE) ---
         window.addEventListener('paste', e => {
             const items = (e.clipboardData || e.originalEvent.clipboardData).items;
             let blob = null;
-            
-            // Ищем картинку в буфере
             for (let i = 0; i < items.length; i++) {
                 if (items[i].type.indexOf("image") === 0) {
                     blob = items[i].getAsFile();
                     break;
                 }
             }
-
             if (blob) {
-                // Определяем, на каком мы экране
                 if (document.getElementById('gen-screen').classList.contains('active')) {
                     handlePastedImage(blob, 'gen');
                 } else if (document.getElementById('product-screen').classList.contains('active')) {
@@ -249,10 +268,7 @@
         });
 
         function handlePastedImage(file, type) {
-            // Сохраняем файл в переменную
             pastedFiles[type] = file;
-
-            // Отображаем превью
             const reader = new FileReader();
             reader.onload = (e) => {
                 if (type === 'gen') {
@@ -260,26 +276,20 @@
                     img.src = e.target.result;
                     img.style.display = 'block';
                     document.getElementById('gen-file-text').innerText = "Фото из буфера!";
-                    document.getElementById('gen-drop-zone').classList.add('highlight');
-                    setTimeout(() => document.getElementById('gen-drop-zone').classList.remove('highlight'), 300);
                 } else {
                     const img = document.getElementById('product-preview');
                     img.src = e.target.result;
                     img.style.display = 'block';
                     document.getElementById('product-text').innerText = "Фото из буфера!";
-                    document.getElementById('product-drop-zone').classList.add('highlight');
-                    setTimeout(() => document.getElementById('product-drop-zone').classList.remove('highlight'), 300);
                 }
             };
             reader.readAsDataURL(file);
             tg.HapticFeedback.notificationOccurred('selection');
         }
 
-        // --- ОБЫЧНЫЙ ВЫБОР ФАЙЛА ---
         function previewFile(inputId, imgId) {
             const file = document.getElementById(inputId).files[0];
             if (file) {
-                // Если выбрали файл вручную, сбрасываем "вставленный" файл
                 if(inputId === 'gen-file') pastedFiles.gen = null;
                 if(inputId === 'product-file') pastedFiles.product = null;
 
@@ -288,7 +298,6 @@
                     const img = document.getElementById(imgId);
                     img.src = e.target.result;
                     img.style.display = 'block';
-                    
                     if(inputId === 'gen-file') document.getElementById('gen-file-text').innerText = "Фото выбрано";
                     if(inputId === 'product-file') document.getElementById('product-text').innerText = "Фото выбрано";
                 };
@@ -296,9 +305,8 @@
             }
         }
 
-        // --- ГЕНЕРАЦИЯ ---
         async function runGeneration(type) {
-            let prompt, btn, imgRes, apiUrl, bodyData, fileInput, fileToSend;
+            let prompt, btn, imgRes, apiUrl, bodyData, fileInput, fileToSend, container;
             const loaderHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size: 24px;"></i>';
 
             if (type === 'text') {
@@ -306,13 +314,11 @@
                 fileInput = document.getElementById('gen-file');
                 btn = document.getElementById('btn-gen');
                 imgRes = document.getElementById('gen-img');
+                container = document.getElementById('gen-result-area'); // Контейнер
                 apiUrl = '/api/generate';
-                
-                // Проверяем: либо файл в input, либо вставленный
                 fileToSend = fileInput.files[0] || pastedFiles.gen;
 
                 if (!prompt) return tg.showAlert('Введите текст!');
-                
                 bodyData = { prompt, initData: tg.initData };
                 if (fileToSend) {
                     btn.innerText = "Чтение...";
@@ -324,8 +330,8 @@
                 fileInput = document.getElementById('product-file');
                 btn = document.getElementById('btn-product');
                 imgRes = document.getElementById('product-img');
+                container = document.getElementById('product-result-area'); // Контейнер
                 apiUrl = '/api/product-gen';
-                
                 fileToSend = fileInput.files[0] || pastedFiles.product;
 
                 if (!fileToSend) return tg.showAlert('Нужно фото продукта!');
@@ -339,7 +345,11 @@
             const originalText = type === 'text' ? "Сгенерировать" : "Обработать";
             btn.disabled = true;
             btn.innerHTML = loaderHTML;
+            
+            // Сброс UI перед загрузкой (показываем плейсхолдер)
             imgRes.style.display = 'none';
+            container.classList.remove('has-result');
+            container.querySelector('.placeholder-text').style.display = 'flex';
 
             try {
                 const res = await fetch(apiUrl, {
@@ -352,6 +362,12 @@
                 if (data.imageUrl) {
                     imgRes.src = data.imageUrl;
                     imgRes.style.display = 'block';
+                    
+                    // --- ВОТ ТУТ МАГИЯ СКРЫТИЯ ЛИШНЕГО ---
+                    container.classList.add('has-result'); // Убираем рамку
+                    container.querySelector('.placeholder-text').style.display = 'none'; // Скрываем текст
+                    // -------------------------------------
+                    
                     tg.HapticFeedback.notificationOccurred('success');
                 } else {
                     tg.showAlert(data.error || 'Ошибка');
