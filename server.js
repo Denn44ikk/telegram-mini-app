@@ -6,12 +6,11 @@ const path = require('path');
 const axios = require('axios');
 const FormData = require('form-data');
 
-const { buildMessages } = require('./prompts');
+const { buildMessages, getModelId, setModelId, getAvailableModels } = require('./prompts');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const MODEL_ID = process.env.MODEL_ID || 'google/gemini-2.0-flash-001';
 
 const publicPath = path.join(__dirname, 'public');
 const indexPath = path.join(publicPath, 'index.html');
@@ -38,83 +37,107 @@ function debugLog(stepName, data) {
 
 // === API ENDPOINTS ===
 app.post('/api/generate', async (req, res) => handleGeneration(req, res));
-app.post('/api/product-gen', async (req, res) => handleGeneration(req, res));
+app.post('/api/product-gen', async (req, res) => handleProductGeneration(req, res));
+
+app.get('/api/settings', (req, res) => {
+    res.json({ modelId: getModelId(), availableModels: getAvailableModels() });
+});
+app.put('/api/settings', (req, res) => {
+    const { modelId } = req.body;
+    if (modelId && getAvailableModels().some(m => m.id === modelId)) {
+        setModelId(modelId);
+        res.json({ success: true, modelId });
+    } else {
+        res.status(400).json({ error: 'Недопустимая модель' });
+    }
+});
+
+async function callAI(prompt, imageBase64) {
+    const modelId = getModelId();
+    const messages = buildMessages(prompt, imageBase64);
+    const response = await axios.post(
+        'https://openrouter.ai/api/v1/chat/completions',
+        { model: modelId, messages },
+        {
+            headers: {
+                'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://banana-gen.app',
+            }
+        }
+    );
+    const choice = response.data.choices?.[0]?.message;
+    const content = choice?.content || "";
+    const base64Match = content.match(/(data:image\/[a-zA-Z]*;base64,[^\s"\)]+)/);
+    const urlMatch = content.match(/(https?:\/\/[^\s\)]+)/);
+    if (base64Match) return base64Match[1];
+    if (urlMatch) return urlMatch[1];
+    if (choice?.images?.length) {
+        const img = choice.images[0];
+        if (img.url) return img.url;
+        if (img.image_url?.url) return img.image_url.url;
+    }
+    throw new Error('AI не вернул картинку (пустой ответ).');
+}
+
+async function handleProductGeneration(req, res) {
+    const { prompt, initData, imageBase64 } = req.body;
+    const modelId = getModelId();
+    debugLog('1. PRODUCT ЗАПРОС', { prompt, hasImage: !!imageBase64, model: modelId, count: 5 });
+
+    const chatId = getChatId(initData);
+
+    try {
+        const results = await Promise.all(
+            Array(5).fill(null).map((_, i) =>
+                callAI(prompt, imageBase64).then(url => ({ url, ok: true }))
+                    .catch(err => ({ error: err.message, ok: false }))
+            )
+        );
+
+        const imageUrls = results.filter(r => r.ok).map(r => r.url);
+        const failed = results.filter(r => !r.ok).length;
+
+        debugLog('2. PRODUCT РЕЗУЛЬТАТ', { success: imageUrls.length, failed });
+
+        if (imageUrls.length === 0) {
+            const msg = failed ? `Все 5 запросов не вернули картинку.` : 'AI не вернул картинки.';
+            if (chatId) await sendText(chatId, `❌ ${msg}`);
+            return res.json({ error: msg, imageUrls: [] });
+        }
+
+        let sentToChat = false;
+        if (chatId && imageUrls.length) {
+            sentToChat = await sendMediaGroupToTelegram(chatId, imageUrls, prompt);
+        }
+
+        res.json({ imageUrls, sentToChat });
+    } catch (error) {
+        debugLog('PRODUCT ОШИБКА', error.message);
+        if (chatId) await sendText(chatId, `❌ Error: ${error.message.substring(0, 200)}`);
+        res.json({ error: 'Ошибка генерации', details: error.message });
+    }
+}
 
 async function handleGeneration(req, res) {
     const { prompt, initData, imageBase64 } = req.body;
-    
-    debugLog('1. ЗАПРОС', { prompt, hasImage: !!imageBase64, model: MODEL_ID });
+    const modelId = getModelId();
+    debugLog('1. ЗАПРОС', { prompt, hasImage: !!imageBase64, model: modelId });
 
-    let chatId = getChatId(initData);
+    const chatId = getChatId(initData);
 
     try {
-        const messages = buildMessages(prompt, imageBase64);
-        
-        debugLog('2. ОТПРАВКА В AI', { model: MODEL_ID, msg_count: messages.length });
+        const imageUrl = await callAI(prompt, imageBase64);
+        debugLog('2. РЕЗУЛЬТАТ', '✅ Картинка получена');
 
-        const response = await axios.post(
-            'https://openrouter.ai/api/v1/chat/completions',
-            {
-                model: MODEL_ID,
-                messages: messages,
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                    'Content-Type': 'application/json',
-                    'HTTP-Referer': 'https://banana-gen.app',
-                }
-            }
-        );
-
-        debugLog('3. ОТВЕТ (RAW)', response.data);
-
-        let imageUrl = null;
-        const choice = response.data.choices?.[0]?.message;
-        const content = choice?.content || "";
-
-        debugLog('4. TEXT CONTENT', content);
-
-        // --- ПОИСК КАРТИНКИ ---
-        
-        const base64Match = content.match(/(data:image\/[a-zA-Z]*;base64,[^\s"\)]+)/);
-        const urlMatch = content.match(/(https?:\/\/[^\s\)]+)/);
-
-        if (base64Match) {
-            imageUrl = base64Match[1];
-            debugLog('5. РЕЗУЛЬТАТ', '✅ Нашли Base64 в тексте');
-        } 
-        else if (urlMatch) {
-            imageUrl = urlMatch[1];
-            debugLog('5. РЕЗУЛЬТАТ', `✅ Нашли ссылку в тексте: ${imageUrl}`);
-        } 
-        else if (choice?.images?.length) {
-            const imgObj = choice.images[0];
-            if (imgObj.url) {
-                imageUrl = imgObj.url;
-                debugLog('5. РЕЗУЛЬТАТ', '✅ Нашли ссылку в images[0].url');
-            } 
-            else if (imgObj.image_url && imgObj.image_url.url) {
-                imageUrl = imgObj.image_url.url;
-                debugLog('5. РЕЗУЛЬТАТ', '✅ Нашли ссылку в images[0].image_url.url');
-            }
-        }
-
-        if (!imageUrl) {
-            debugLog('5. РЕЗУЛЬТАТ', '❌ Картинка не найдена нигде.');
-            throw new Error('AI не вернул картинку (пустой ответ).');
-        }
-
-        // Отправка в ТГ
         let sentToChat = false;
         if (chatId) {
             sentToChat = await sendToTelegram(chatId, imageUrl, prompt, true);
         }
 
-        res.json({ imageUrl: imageUrl, sentToChat });
-
+        res.json({ imageUrl, sentToChat });
     } catch (error) {
-        debugLog('6. ОШИБКА', error.response?.data || error.message);
+        debugLog('3. ОШИБКА', error.response?.data || error.message);
         if (chatId) await sendText(chatId, `❌ Error:\n${error.message.substring(0, 200)}`);
         res.json({ error: 'Ошибка генерации', details: error.message });
     }
@@ -142,6 +165,45 @@ async function sendText(chatId, text) {
     try {
         await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, { chat_id: chatId, text: text });
     } catch (e) {}
+}
+
+async function sendMediaGroupToTelegram(chatId, imageUrls, caption) {
+    try {
+        const hasDataUrls = imageUrls.some(u => u.startsWith('data:'));
+        const captionText = `🎨 Фотосессия: "${(caption || '').substring(0, 900)}"`;
+
+        if (hasDataUrls) {
+            const form = new FormData();
+            form.append('chat_id', chatId);
+            const media = [];
+            for (let i = 0; i < imageUrls.length; i++) {
+                const url = imageUrls[i];
+                const key = `photo${i}`;
+                media.push({ type: 'photo', media: `attach://${key}`, caption: i === 0 ? captionText : undefined });
+                if (url.startsWith('data:')) {
+                    const base64 = url.split(';base64,').pop();
+                    form.append(key, Buffer.from(fixBase64(base64), 'base64'), { filename: 'gen.png' });
+                } else {
+                    const stream = await axios.get(url, { responseType: 'stream', timeout: 20000 });
+                    form.append(key, stream.data, { filename: 'gen.png' });
+                }
+            }
+            form.append('media', JSON.stringify(media));
+            await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/sendMediaGroup`, form, { headers: form.getHeaders() });
+        } else {
+            const media = imageUrls.map((url, i) => ({
+                type: 'photo',
+                media: url,
+                caption: i === 0 ? captionText : undefined
+            }));
+            await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/sendMediaGroup`, { chat_id: chatId, media });
+        }
+        debugLog('TELEGRAM', `✅ Отправлен альбом из ${imageUrls.length} фото`);
+        return true;
+    } catch (e) {
+        debugLog('TELEGRAM MEDIAGROUP ERROR', e.response?.data || e.message);
+        return false;
+    }
 }
 
 async function sendToTelegram(chatId, resource, caption, isDocument) {
@@ -196,4 +258,4 @@ async function sendToTelegram(chatId, resource, caption, isDocument) {
 }
 
 app.get('/', (req, res) => res.sendFile(indexPath));
-app.listen(PORT, () => console.log(`🚀 SERVER READY: ${MODEL_ID}`));
+app.listen(PORT, () => console.log(`🚀 SERVER READY: ${getModelId()}`));

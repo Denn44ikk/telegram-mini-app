@@ -125,6 +125,24 @@
             margin-bottom: 20px; box-shadow: 0 4px 15px rgba(118, 75, 162, 0.4);
         }
         .balance-amount { font-size: 36px; font-weight: bold; margin: 10px 0; }
+
+        .product-images-grid {
+            display: none; gap: 8px; grid-template-columns: repeat(2, 1fr); margin-top: 10px;
+        }
+        .product-images-grid.visible { display: grid; }
+        .product-images-grid img {
+            width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .product-images-grid .span-full { grid-column: span 2; }
+
+        .settings-card { background: var(--card-bg); border-radius: 16px; padding: 20px; margin-bottom: 20px; }
+        .settings-card label { display: block; font-size: 14px; color: var(--hint-color); margin-bottom: 8px; }
+        .settings-card select {
+            width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--hint-color);
+            background: var(--bg-color); color: var(--text-color); font-size: 16px;
+        }
+        .settings-saved { color: var(--button-color); font-size: 13px; margin-top: 10px; display: none; }
     </style>
 </head>
 <body>
@@ -148,7 +166,7 @@
                 <i class="fa-solid fa-coins"></i>
                 <span>Баланс</span>
             </button>
-            <button class="menu-btn" onclick="tg.showAlert('Настройки пока недоступны')">
+            <button class="menu-btn" onclick="navTo('settings-screen')">
                 <i class="fa-solid fa-gear"></i>
                 <span>Настройки</span>
             </button>
@@ -206,17 +224,32 @@
         </div>
 
         <div class="result-placeholder" id="product-result-area" style="min-height: 200px;">
-             <!-- Добавил класс placeholder-text -->
             <div class="placeholder-text" style="display:flex; flex-direction:column; align-items:center;">
-                <p>Результат</p>
+                <p>Результат (5 фото)</p>
             </div>
-            <img id="product-img" src="">
+            <div id="product-images-grid" class="product-images-grid"></div>
         </div>
 
         <button id="btn-product" class="main-btn" onclick="runGeneration('product')">Обработать</button>
     </div>
 
-    <!-- 4. БАЛАНС -->
+    <!-- 4. НАСТРОЙКИ -->
+    <div id="settings-screen" class="screen">
+        <div class="nav-bar">
+            <button class="icon-btn" onclick="navTo('menu-screen')"><i class="fa-solid fa-arrow-left"></i></button>
+            <h3>Настройки</h3>
+            <div style="width: 24px;"></div>
+        </div>
+        <div class="settings-card">
+            <label for="model-select">Модель для генерации</label>
+            <select id="model-select" onchange="saveModel()">
+                <!-- заполняется через JS -->
+            </select>
+            <div id="settings-saved" class="settings-saved">✓ Сохранено</div>
+        </div>
+    </div>
+
+    <!-- 5. БАЛАНС -->
     <div id="balance-screen" class="screen">
         <div class="nav-bar">
             <button class="icon-btn" onclick="navTo('menu-screen')"><i class="fa-solid fa-arrow-left"></i></button>
@@ -247,6 +280,33 @@
                 tg.BackButton.show();
                 tg.BackButton.onClick(() => navTo('menu-screen'));
             }
+            if (screenId === 'settings-screen') loadSettings();
+        }
+
+        async function loadSettings() {
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                const sel = document.getElementById('model-select');
+                sel.innerHTML = data.availableModels.map(m =>
+                    `<option value="${m.id}" ${m.id === data.modelId ? 'selected' : ''}>${m.name}</option>`
+                ).join('');
+            } catch (e) { tg.showAlert('Не удалось загрузить настройки'); }
+        }
+
+        async function saveModel() {
+            const modelId = document.getElementById('model-select').value;
+            try {
+                const res = await fetch('/api/settings', {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ modelId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('settings-saved').style.display = 'block';
+                    setTimeout(() => document.getElementById('settings-saved').style.display = 'none', 2000);
+                }
+            } catch (e) { tg.showAlert('Не удалось сохранить'); }
         }
 
         window.addEventListener('paste', e => {
@@ -346,8 +406,10 @@
             btn.disabled = true;
             btn.innerHTML = loaderHTML;
             
-            // Сброс UI перед загрузкой (показываем плейсхолдер)
-            imgRes.style.display = 'none';
+            // Сброс UI перед загрузкой
+            if (imgRes) imgRes.style.display = 'none';
+            const grid = document.getElementById('product-images-grid');
+            if (grid) { grid.innerHTML = ''; grid.classList.remove('visible'); }
             container.classList.remove('has-result');
             container.querySelector('.placeholder-text').style.display = 'flex';
 
@@ -359,15 +421,18 @@
                 });
                 const data = await res.json();
 
-                if (data.imageUrl) {
+                if (type === 'product' && data.imageUrls && data.imageUrls.length) {
+                    const grid = document.getElementById('product-images-grid');
+                    grid.innerHTML = data.imageUrls.map(url => `<img src="${url}" alt="">`).join('');
+                    grid.classList.add('visible');
+                    container.classList.add('has-result');
+                    container.querySelector('.placeholder-text').style.display = 'none';
+                    tg.HapticFeedback.notificationOccurred('success');
+                } else if (type === 'text' && data.imageUrl) {
                     imgRes.src = data.imageUrl;
                     imgRes.style.display = 'block';
-                    
-                    // --- ВОТ ТУТ МАГИЯ СКРЫТИЯ ЛИШНЕГО ---
-                    container.classList.add('has-result'); // Убираем рамку
-                    container.querySelector('.placeholder-text').style.display = 'none'; // Скрываем текст
-                    // -------------------------------------
-                    
+                    container.classList.add('has-result');
+                    container.querySelector('.placeholder-text').style.display = 'none';
                     tg.HapticFeedback.notificationOccurred('success');
                 } else {
                     tg.showAlert(data.error || 'Ошибка');
