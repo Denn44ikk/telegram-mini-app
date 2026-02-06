@@ -459,21 +459,14 @@
                 clearTimeout(timeoutId);
                 let data;
                 try {
-                    data = await res.json();
+                    const text = await res.text();
+                    data = text ? JSON.parse(text) : {};
                 } catch (_) {
-                    data = { error: res.ok ? 'Ошибка ответа сервера' : 'Сервер не отвечает' };
+                    data = { error: res.ok ? 'Ошибка ответа сервера' : `Сервер вернул ошибку (${res.status}). Проверьте: 1) Сервер запущен. 2) OPENROUTER_API_KEY в .env` };
                 }
+                if (!res.ok && !data.error) data.error = data.details || `Ошибка ${res.status}`;
 
-                if (type === 'product' && data.sentToChat && (!data.imageUrls || data.imageUrls.length === 0)) {
-                    // Фото уже отправлены в чат — не грузим тяжёлый ответ, показываем успех
-                    const grid = document.getElementById('product-images-grid');
-                    grid.innerHTML = '';
-                    grid.classList.remove('visible');
-                    container.classList.add('has-result');
-                    container.querySelector('.placeholder-text').innerHTML = '<i class="fa-solid fa-check-circle" style="color: var(--button-color); font-size: 32px;"></i><p style="margin: 8px 0 4px;">Готово!</p><p style="font-size: 14px; color: var(--hint-color);">5 фото отправлены в чат с ботом</p>';
-                    container.querySelector('.placeholder-text').style.display = 'flex';
-                    tg.HapticFeedback.notificationOccurred('success');
-                } else if (type === 'product' && data.imageUrls && data.imageUrls.length) {
+                if (type === 'product' && data.imageUrls && data.imageUrls.length) {
                     const grid = document.getElementById('product-images-grid');
                     grid.innerHTML = data.imageUrls.map(url => `<img src="${url}" alt="">`).join('');
                     grid.classList.add('visible');

@@ -36,6 +36,11 @@ function debugLog(stepName, data) {
 }
 
 // === API ENDPOINTS ===
+app.get('/api/health', (req, res) => {
+    const hasKey = !!process.env.OPENROUTER_API_KEY;
+    res.json({ ok: true, openrouter: hasKey ? 'ok' : 'missing' });
+});
+
 app.post('/api/generate', async (req, res) => handleGeneration(req, res));
 app.post('/api/product-gen', async (req, res) => handleProductGeneration(req, res));
 
@@ -85,6 +90,9 @@ async function callAI(prompt, imageBase64, mode) {
 }
 
 async function handleProductGeneration(req, res) {
+    if (!process.env.OPENROUTER_API_KEY) {
+        return res.status(500).json({ error: 'Не настроен OPENROUTER_API_KEY. Добавьте ключ в .env' });
+    }
     // Генерация 5 фото может занять 2–3 мин — увеличиваем таймаут запроса (по умолчанию ~2 мин)
     res.setTimeout(300000);
     const { prompt, initData, imageBase64 } = req.body;
@@ -118,11 +126,8 @@ async function handleProductGeneration(req, res) {
             sentToChat = await sendMediaGroupToTelegram(chatId, imageUrls, prompt);
         }
 
-        // Не отправляем тяжёлые base64 в ответ — иначе 10–20 МБ рвут соединение и клиент показывает «Сервер не отвечает»
-        if (sentToChat) {
-            return res.json({ imageUrls: [], sentToChat: true });
-        }
-        res.json({ imageUrls, sentToChat: false });
+        // Отдаём фото в приложение (таймаут запроса уже увеличен — 5 мин)
+        res.json({ imageUrls, sentToChat });
     } catch (error) {
         debugLog('PRODUCT ОШИБКА', error.message);
         if (chatId) await sendText(chatId, `❌ Error: ${error.message.substring(0, 200)}`);
@@ -131,6 +136,9 @@ async function handleProductGeneration(req, res) {
 }
 
 async function handleGeneration(req, res) {
+    if (!process.env.OPENROUTER_API_KEY) {
+        return res.status(500).json({ error: 'Не настроен OPENROUTER_API_KEY. Добавьте ключ в .env' });
+    }
     const { prompt, initData, imageBase64 } = req.body;
     const modelId = getModelId();
     debugLog('1. ЗАПРОС', { prompt, hasImage: !!imageBase64, model: modelId });
@@ -269,4 +277,15 @@ async function sendToTelegram(chatId, resource, caption, isDocument) {
 }
 
 app.get('/', (req, res) => res.sendFile(indexPath));
-app.listen(PORT, () => console.log(`🚀 SERVER READY: ${getModelId()}`));
+
+// Всегда возвращаем JSON при ошибках
+app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    res.status(500).json({ error: 'Ошибка сервера', details: err.message });
+});
+
+app.listen(PORT, () => {
+    const keyOk = !!process.env.OPENROUTER_API_KEY;
+    console.log(`🚀 SERVER READY: ${getModelId()}`);
+    if (!keyOk) console.warn('⚠️  OPENROUTER_API_KEY не задан в .env — генерация не будет работать!');
+});
