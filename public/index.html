@@ -408,8 +408,8 @@
                 if (!prompt) return tg.showAlert('Введите текст!');
                 bodyData = { prompt, initData: tg.initData };
                 if (fileToSend) {
-                    btn.innerText = "Чтение...";
-                    bodyData.imageBase64 = await toBase64(fileToSend);
+                    apiUrl = '/api/generate-image';
+                    bodyData = { formData: true, prompt, initData: tg.initData, file: fileToSend };
                 }
             } 
             else if (type === 'product') {
@@ -418,15 +418,13 @@
                 btn = document.getElementById('btn-product');
                 imgRes = document.getElementById('product-img');
                 container = document.getElementById('product-result-area'); // Контейнер
-                apiUrl = '/api/product-gen';
+                apiUrl = '/api/product-gen-image';
                 fileToSend = fileInput.files[0] || pastedFiles.product;
 
                 if (!fileToSend) return tg.showAlert('Нужно фото продукта!');
                 if (!prompt) return tg.showAlert('Опишите фон!');
 
-                btn.innerText = "Чтение...";
-                const base64 = await toBase64(fileToSend);
-                bodyData = { prompt, imageBase64: base64, initData: tg.initData };
+                bodyData = { formData: true, prompt, initData: tg.initData, file: fileToSend };
             }
 
             const originalText = type === 'text' ? "Сгенерировать" : "Обработать";
@@ -449,13 +447,22 @@
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
+            const isFormData = bodyData.formData;
+            let fetchOpts;
+            if (isFormData) {
+                const fd = new FormData();
+                fd.append('prompt', bodyData.prompt);
+                fd.append('initData', bodyData.initData || '');
+                fd.append('image', bodyData.file);
+                fetchOpts = { method: 'POST', body: fd, signal: controller.signal };
+            } else {
+                delete bodyData.formData;
+                delete bodyData.file;
+                fetchOpts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyData), signal: controller.signal };
+            }
+
             try {
-                const res = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(bodyData),
-                    signal: controller.signal
-                });
+                const res = await fetch(apiUrl, fetchOpts);
                 clearTimeout(timeoutId);
                 let data;
                 try {

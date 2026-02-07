@@ -5,6 +5,7 @@ const bodyParser = require('body-parser');
 const path = require('path');
 const axios = require('axios');
 const FormData = require('form-data');
+const multer = require('multer');
 
 const { buildMessages, getModelId, setModelId, getAvailableModels } = require('./prompts');
 
@@ -14,6 +15,9 @@ const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 const publicPath = path.join(__dirname, 'public');
 const indexPath = path.join(publicPath, 'index.html');
+
+// Для загрузки фото без base64 — multipart, до 50MB
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' })); 
@@ -42,7 +46,42 @@ app.get('/api/health', (req, res) => {
 });
 
 app.post('/api/generate', async (req, res) => handleGeneration(req, res));
+// Multipart — фото целиком, без base64 (обход лимитов прокси)
+app.post('/api/generate-image', upload.single('image'), async (req, res) => {
+    try {
+        const prompt = req.body?.prompt;
+        const initData = req.body?.initData;
+        const file = req.file;
+        if (!prompt || !file) {
+            return res.status(400).json({ error: 'Нужны prompt и image' });
+        }
+        const buffer = file.buffer;
+        const mime = file.mimetype || 'image/jpeg';
+        const imageBase64 = `data:${mime};base64,${buffer.toString('base64')}`;
+        req.body = { prompt, initData, imageBase64 };
+        return handleGeneration(req, res);
+    } catch (e) {
+        res.status(500).json({ error: 'Ошибка загрузки', details: e.message });
+    }
+});
 app.post('/api/product-gen', async (req, res) => handleProductGeneration(req, res));
+app.post('/api/product-gen-image', upload.single('image'), async (req, res) => {
+    try {
+        const prompt = req.body?.prompt;
+        const initData = req.body?.initData;
+        const file = req.file;
+        if (!prompt || !file) {
+            return res.status(400).json({ error: 'Нужны prompt и image' });
+        }
+        const buffer = file.buffer;
+        const mime = file.mimetype || 'image/jpeg';
+        const imageBase64 = `data:${mime};base64,${buffer.toString('base64')}`;
+        req.body = { prompt, initData, imageBase64 };
+        return handleProductGeneration(req, res);
+    } catch (e) {
+        res.status(500).json({ error: 'Ошибка загрузки', details: e.message });
+    }
+});
 
 app.get('/api/settings', (req, res) => {
     res.json({ modelId: getModelId(), availableModels: getAvailableModels() });
