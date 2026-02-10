@@ -283,15 +283,25 @@ async function handleRefPairGeneration(req, res) {
     const modelId = getModelId();
     debugLog('1. REFPAIR ЗАПРОС', { prompt, hasRef: !!refImageBase64, hasTarget: !!targetImageBase64, model: modelId });
 
-    if (!prompt || !refImageBase64 || !targetImageBase64) {
-        return res.status(400).json({ error: 'Нужны текстовый запрос и два изображения (референс и основное).' });
+    if (!prompt || !refImageBase64) {
+        return res.status(400).json({ error: 'Нужны текстовый запрос и минимум одно изображение (референс).' });
     }
 
     const chatId = getChatId(initData);
 
     try {
-        const messages = buildRefPairMessages(prompt, refImageBase64, targetImageBase64);
-        const imageUrl = await callAIWithMessages(messages);
+        let imageUrl;
+
+        if (targetImageBase64) {
+            // Классический режим: референс + основное фото
+            const messages = buildRefPairMessages(prompt, refImageBase64, targetImageBase64);
+            imageUrl = await callAIWithMessages(messages);
+        } else {
+            // Новый режим: только референс + промт (как «фото по промту с референсом»)
+            const messages = buildMessages(prompt, refImageBase64, 'gen');
+            imageUrl = await callAIWithMessages(messages);
+        }
+
         debugLog('2. REFPAIR РЕЗУЛЬТАТ', '✅ Картинка получена');
 
         let sentToChat = false;
@@ -303,7 +313,7 @@ async function handleRefPairGeneration(req, res) {
     } catch (error) {
         debugLog('REFPAIR ОШИБКА', error.response?.data || error.message);
         if (chatId) await sendText(chatId, `❌ Error:\n${error.message.substring(0, 200)}`);
-        res.json({ error: 'Ошибка генерации по двум фото', details: error.message });
+        res.json({ error: 'Ошибка генерации по референсу', details: error.message });
     }
 }
 

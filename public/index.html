@@ -257,7 +257,7 @@
             <div style="width: 24px;"></div>
         </div>
 
-        <label id="product-drop-zone" class="upload-area">
+        <label id="product-drop-zone" class="upload-area" onclick="setActivePasteTarget('product')">
             <input type="file" id="product-file" accept="image/*" style="display:none" onchange="previewFile('product-file', 'product-preview')">
             <i class="fa-solid fa-cloud-arrow-up" style="font-size: 30px; margin-bottom: 10px;"></i>
             <div id="product-text">Загрузить или вставить (Ctrl+V)</div>
@@ -292,17 +292,17 @@
             <textarea id="ref-prompt" placeholder="Опишите, что вы хотите получить..."></textarea>
         </div>
 
-        <label class="mini-upload">
+        <label class="mini-upload" onclick="setActivePasteTarget('ref-style')">
             <input type="file" id="ref-style-file" accept="image/*" style="display:none" onchange="previewFile('ref-style-file', 'ref-style-preview')">
             <i class="fa-regular fa-image" style="font-size: 18px;"></i>
-            <span id="ref-style-text">Загрузить референс (стиль)</span>
+            <span id="ref-style-text">Загрузить референс (стиль) или Ctrl+V</span>
             <img id="ref-style-preview" class="preview-thumb">
         </label>
 
-        <label class="mini-upload">
+        <label class="mini-upload" onclick="setActivePasteTarget('ref-target')">
             <input type="file" id="ref-target-file" accept="image/*" style="display:none" onchange="previewFile('ref-target-file', 'ref-target-preview')">
             <i class="fa-regular fa-image" style="font-size: 18px;"></i>
-            <span id="ref-target-text">Загрузить основное фото</span>
+            <span id="ref-target-text">Загрузить основное фото или Ctrl+V</span>
             <img id="ref-target-preview" class="preview-thumb">
         </label>
 
@@ -327,7 +327,7 @@
             <div style="width: 24px;"></div>
         </div>
 
-        <label id="poses-drop-zone" class="upload-area">
+        <label id="poses-drop-zone" class="upload-area" onclick="setActivePasteTarget('poses')">
             <input type="file" id="poses-file" accept="image/*" style="display:none" onchange="previewFile('poses-file', 'poses-preview')">
             <i class="fa-solid fa-cloud-arrow-up" style="font-size: 30px; margin-bottom: 10px;"></i>
             <div id="poses-text">Загрузите фото человека</div>
@@ -394,7 +394,12 @@
         const tg = window.Telegram.WebApp;
         tg.ready(); tg.expand();
 
-        let pastedFiles = { gen: null, product: null };
+        let pastedFiles = { gen: null, product: null, poses: null, refStyle: null, refTarget: null };
+        let activePasteTarget = null;
+
+        function setActivePasteTarget(target) {
+            activePasteTarget = target;
+        }
 
         function navTo(screenId) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -444,10 +449,20 @@
                 }
             }
             if (blob) {
+                // Если пользователь явно кликнул по зоне — уважаем выбор
+                if (activePasteTarget) {
+                    handlePastedImage(blob, activePasteTarget);
+                    return;
+                }
+                // Иначе — по активному экрану, как раньше
                 if (document.getElementById('gen-screen').classList.contains('active')) {
                     handlePastedImage(blob, 'gen');
                 } else if (document.getElementById('product-screen').classList.contains('active')) {
                     handlePastedImage(blob, 'product');
+                } else if (document.getElementById('poses-screen').classList.contains('active')) {
+                    handlePastedImage(blob, 'poses');
+                } else if (document.getElementById('ref-screen').classList.contains('active')) {
+                    handlePastedImage(blob, 'ref-style');
                 }
             }
         });
@@ -461,11 +476,26 @@
                     img.src = e.target.result;
                     img.style.display = 'block';
                     document.getElementById('gen-file-text').innerText = "Фото из буфера!";
-                } else {
+                } else if (type === 'product') {
                     const img = document.getElementById('product-preview');
                     img.src = e.target.result;
                     img.style.display = 'block';
                     document.getElementById('product-text').innerText = "Фото из буфера!";
+                } else if (type === 'poses') {
+                    const img = document.getElementById('poses-preview');
+                    img.src = e.target.result;
+                    img.style.display = 'block';
+                    document.getElementById('poses-text').innerText = "Фото из буфера!";
+                } else if (type === 'ref-style') {
+                    const img = document.getElementById('ref-style-preview');
+                    img.src = e.target.result;
+                    img.style.display = 'block';
+                    document.getElementById('ref-style-text').innerText = "Референс из буфера!";
+                } else if (type === 'ref-target') {
+                    const img = document.getElementById('ref-target-preview');
+                    img.src = e.target.result;
+                    img.style.display = 'block';
+                    document.getElementById('ref-target-text').innerText = "Фото из буфера!";
                 }
             };
             reader.readAsDataURL(file);
@@ -477,6 +507,9 @@
             if (file) {
                 if(inputId === 'gen-file') pastedFiles.gen = null;
                 if(inputId === 'product-file') pastedFiles.product = null;
+                if(inputId === 'poses-file') pastedFiles.poses = null;
+                if(inputId === 'ref-style-file') pastedFiles.refStyle = null;
+                if(inputId === 'ref-target-file') pastedFiles.refTarget = null;
 
                 const reader = new FileReader();
                 reader.onload = (e) => {
@@ -485,6 +518,9 @@
                     img.style.display = 'block';
                     if(inputId === 'gen-file') document.getElementById('gen-file-text').innerText = "Фото выбрано";
                     if(inputId === 'product-file') document.getElementById('product-text').innerText = "Фото выбрано";
+                    if(inputId === 'poses-file') document.getElementById('poses-text').innerText = "Фото выбрано";
+                    if(inputId === 'ref-style-file') document.getElementById('ref-style-text').innerText = "Референс выбран";
+                    if(inputId === 'ref-target-file') document.getElementById('ref-target-text').innerText = "Фото выбрано";
                 };
                 reader.readAsDataURL(file);
             }
@@ -532,14 +568,21 @@
                 container = document.getElementById('ref-result-area');
                 apiUrl = '/api/generate-refpair';
 
-                const refFile = styleInput.files[0];
-                const targetFile = targetInput.files[0];
+                const refFile = styleInput.files[0] || pastedFiles.refStyle;
+                const targetFile = targetInput.files[0] || pastedFiles.refTarget;
 
-                if (!refFile || !targetFile) return tg.showAlert('Нужно выбрать оба фото: референс и основное.');
+                if (!refFile) return tg.showAlert('Нужно хотя бы фото референса.');
                 if (!prompt) return tg.showAlert('Опишите, что вы хотите получить.');
 
-                const [refBase64, targetBase64] = await Promise.all([toBase64(refFile), toBase64(targetFile)]);
-                bodyData = { prompt, initData: tg.initData, refImageBase64: refBase64, targetImageBase64: targetBase64 };
+                const refBase64 = await toBase64(refFile);
+
+                if (targetFile) {
+                    const targetBase64 = await toBase64(targetFile);
+                    bodyData = { prompt, initData: tg.initData, refImageBase64: refBase64, targetImageBase64: targetBase64 };
+                } else {
+                    // Только референс + промт, без основного фото
+                    bodyData = { prompt, initData: tg.initData, refImageBase64: refBase64 };
+                }
             }
             else if (type === 'poses') {
                 prompt = document.getElementById('poses-prompt').value;
@@ -547,7 +590,7 @@
                 btn = document.getElementById('btn-poses');
                 container = document.getElementById('poses-result-area');
                 apiUrl = '/api/poses-gen-image';
-                fileToSend = fileInput.files[0];
+                fileToSend = fileInput.files[0] || pastedFiles.poses;
 
                 if (!fileToSend) return tg.showAlert('Нужно фото человека!');
 
