@@ -423,6 +423,9 @@
             <div class="balance-amount">0 BNB</div>
             <div style="font-size: 12px; opacity: 0.8;">Nano Banana Coins</div>
         </div>
+        <div id="ref-info" style="text-align: center; color: var(--hint-color); margin-top: 12px; font-size: 13px;">
+            Реферальная программа скоро будет доступна.
+        </div>
         <div style="text-align: center; color: var(--hint-color); margin-top: 20px;">История пуста</div>
         <button class="main-btn" onclick="tg.showAlert('Скоро!')">Пополнить</button>
     </div>
@@ -464,6 +467,7 @@
                 tg.BackButton.onClick(() => navTo('menu-screen'));
             }
             if (screenId === 'settings-screen') loadSettings();
+            if (screenId === 'balance-screen') loadBalance();
         }
 
         async function loadSettings() {
@@ -493,6 +497,25 @@
                     setTimeout(() => document.getElementById('settings-saved').style.display = 'none', 2000);
                 }
             } catch (e) { tg.showAlert('Не удалось сохранить'); }
+        }
+
+        async function loadBalance() {
+            try {
+                const url = `/api/balance?initData=${encodeURIComponent(tg.initData || '')}`;
+                uiLog('loadBalance:fetch', { url });
+                const res = await fetch(url);
+                const data = await res.json();
+                uiLog('loadBalance:response', data);
+                if (data.error) return;
+                const amountEl = document.querySelector('.balance-amount');
+                if (amountEl) amountEl.textContent = `${data.balance} BNB`;
+                const refInfo = document.getElementById('ref-info');
+                if (refInfo && data.refCode) {
+                    refInfo.innerHTML = `Ваш реферальный код: <b>${data.refCode}</b><br>Приглашено друзей: <b>${data.referredCount}</b>`;
+                }
+            } catch (e) {
+                uiLog('loadBalance:error', { message: e.message });
+            }
         }
 
         window.addEventListener('paste', e => {
