@@ -186,6 +186,14 @@
                 <i class="fa-solid fa-camera-retro"></i>
                 <span>Фотосессия с продуктом</span>
             </button>
+            <button class="menu-btn" onclick="navTo('ref-screen')">
+                <i class="fa-solid fa-images"></i>
+                <span>Фото по референсу</span>
+            </button>
+            <button class="menu-btn" onclick="navTo('poses-screen')">
+                <i class="fa-solid fa-person-running"></i>
+                <span>Случайные позы</span>
+            </button>
             <button class="menu-btn" onclick="navTo('balance-screen')">
                 <i class="fa-solid fa-coins"></i>
                 <span>Баланс</span>
@@ -258,6 +266,84 @@
         </div>
 
         <button id="btn-product" class="main-btn" onclick="runGeneration('product')">Обработать</button>
+    </div>
+
+    <!-- 3.1. ФОТО ПО РЕФЕРЕНСУ (ДВА ФОТО) -->
+    <div id="ref-screen" class="screen">
+        <div class="nav-bar">
+            <button class="icon-btn" onclick="navTo('menu-screen')"><i class="fa-solid fa-arrow-left"></i></button>
+            <h3>Фото по референсу</h3>
+            <div style="width: 24px;"></div>
+        </div>
+
+        <div class="input-card">
+            <textarea id="ref-prompt" placeholder="Опишите, что вы хотите получить..."></textarea>
+        </div>
+
+        <label class="mini-upload">
+            <input type="file" id="ref-style-file" accept="image/*" style="display:none" onchange="previewFile('ref-style-file', 'ref-style-preview')">
+            <i class="fa-regular fa-image" style="font-size: 18px;"></i>
+            <span id="ref-style-text">Загрузить референс (стиль)</span>
+            <img id="ref-style-preview" class="preview-thumb">
+        </label>
+
+        <label class="mini-upload">
+            <input type="file" id="ref-target-file" accept="image/*" style="display:none" onchange="previewFile('ref-target-file', 'ref-target-preview')">
+            <i class="fa-regular fa-image" style="font-size: 18px;"></i>
+            <span id="ref-target-text">Загрузить основное фото</span>
+            <img id="ref-target-preview" class="preview-thumb">
+        </label>
+
+        <div class="result-placeholder" id="ref-result-area">
+            <div class="placeholder-text" style="display:flex; flex-direction:column; align-items:center;">
+                <i class="fa-regular fa-image" style="font-size: 24px;"></i>
+                <p>Результат</p>
+            </div>
+            <div class="result-image-wrap">
+                <img id="ref-img" class="result-single-img" src="" alt="">
+            </div>
+        </div>
+
+        <button id="btn-ref" class="main-btn" onclick="runGeneration('ref')">Сгенерировать</button>
+    </div>
+
+    <!-- 3.2. СЛУЧАЙНЫЕ ПОЗЫ -->
+    <div id="poses-screen" class="screen">
+        <div class="nav-bar">
+            <button class="icon-btn" onclick="navTo('menu-screen')"><i class="fa-solid fa-arrow-left"></i></button>
+            <h3>Случайные позы</h3>
+            <div style="width: 24px;"></div>
+        </div>
+
+        <label id="poses-drop-zone" class="upload-area">
+            <input type="file" id="poses-file" accept="image/*" style="display:none" onchange="previewFile('poses-file', 'poses-preview')">
+            <i class="fa-solid fa-cloud-arrow-up" style="font-size: 30px; margin-bottom: 10px;"></i>
+            <div id="poses-text">Загрузите фото человека</div>
+            <img id="poses-preview" class="upload-preview" src="">
+        </label>
+
+        <div class="input-card">
+            <textarea id="poses-prompt" placeholder="Пожелания: стиль, эмоции, ракурс... (необязательно)"></textarea>
+        </div>
+
+        <div class="input-card">
+            <label for="poses-count" style="font-size: 14px; color: var(--hint-color); display:block; margin-bottom:6px;">
+                Количество поз (1–10)
+            </label>
+            <input id="poses-count" type="number" min="1" max="10" value="4" 
+                   style="width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--hint-color); background: var(--bg-color); color: var(--text-color); font-size: 16px;">
+        </div>
+
+        <div class="result-placeholder" id="poses-result-area" style="min-height: 200px;">
+            <div class="placeholder-text" style="display:flex; flex-direction:column; align-items:center;">
+                <p>Результат (несколько поз)</p>
+            </div>
+            <div class="product-result-wrap">
+                <div id="poses-images-grid" class="product-images-grid"></div>
+            </div>
+        </div>
+
+        <button id="btn-poses" class="main-btn" onclick="runGeneration('poses')">Сгенерировать позы</button>
     </div>
 
     <!-- 4. НАСТРОЙКИ -->
@@ -416,7 +502,6 @@
                 prompt = document.getElementById('product-prompt').value;
                 fileInput = document.getElementById('product-file');
                 btn = document.getElementById('btn-product');
-                imgRes = document.getElementById('product-img');
                 container = document.getElementById('product-result-area'); // Контейнер
                 apiUrl = '/api/product-gen-image';
                 fileToSend = fileInput.files[0] || pastedFiles.product;
@@ -426,19 +511,56 @@
 
                 bodyData = { formData: true, prompt, initData: tg.initData, file: fileToSend };
             }
+            else if (type === 'ref') {
+                prompt = document.getElementById('ref-prompt').value;
+                const styleInput = document.getElementById('ref-style-file');
+                const targetInput = document.getElementById('ref-target-file');
+                btn = document.getElementById('btn-ref');
+                imgRes = document.getElementById('ref-img');
+                container = document.getElementById('ref-result-area');
+                apiUrl = '/api/generate-refpair';
 
-            const originalText = type === 'text' ? "Сгенерировать" : "Обработать";
+                const refFile = styleInput.files[0];
+                const targetFile = targetInput.files[0];
+
+                if (!refFile || !targetFile) return tg.showAlert('Нужно выбрать оба фото: референс и основное.');
+                if (!prompt) return tg.showAlert('Опишите, что вы хотите получить.');
+
+                const [refBase64, targetBase64] = await Promise.all([toBase64(refFile), toBase64(targetFile)]);
+                bodyData = { prompt, initData: tg.initData, refImageBase64: refBase64, targetImageBase64: targetBase64 };
+            }
+            else if (type === 'poses') {
+                prompt = document.getElementById('poses-prompt').value;
+                fileInput = document.getElementById('poses-file');
+                btn = document.getElementById('btn-poses');
+                container = document.getElementById('poses-result-area');
+                apiUrl = '/api/poses-gen-image';
+                fileToSend = fileInput.files[0];
+
+                if (!fileToSend) return tg.showAlert('Нужно фото человека!');
+
+                const countVal = parseInt(document.getElementById('poses-count').value, 10);
+                const count = isNaN(countVal) ? 4 : Math.min(10, Math.max(1, countVal));
+
+                bodyData = { formData: true, prompt, initData: tg.initData, file: fileToSend, count };
+            }
+
+            const originalText = btn.innerText;
             btn.disabled = true;
             if (type === 'product') {
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Генерация 5 фото (1–2 мин)…';
+            } else if (type === 'poses') {
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Генерация поз (1–2 мин)…';
             } else {
                 btn.innerHTML = loaderHTML;
             }
 
             // Сброс UI перед загрузкой
             if (imgRes) imgRes.style.display = 'none';
-            const grid = document.getElementById('product-images-grid');
-            if (grid) { grid.innerHTML = ''; grid.classList.remove('visible'); }
+            const gridProduct = document.getElementById('product-images-grid');
+            if (gridProduct) { gridProduct.innerHTML = ''; gridProduct.classList.remove('visible'); }
+            const gridPoses = document.getElementById('poses-images-grid');
+            if (gridPoses) { gridPoses.innerHTML = ''; gridPoses.classList.remove('visible'); }
             container.classList.remove('has-result');
             container.querySelector('.placeholder-text').style.display = 'flex';
 
@@ -453,6 +575,9 @@
                 const fd = new FormData();
                 fd.append('prompt', bodyData.prompt);
                 fd.append('initData', bodyData.initData || '');
+                if (bodyData.count !== undefined && bodyData.count !== null) {
+                    fd.append('count', String(bodyData.count));
+                }
                 fd.append('image', bodyData.file);
                 fetchOpts = { method: 'POST', body: fd, signal: controller.signal };
             } else {
@@ -480,7 +605,14 @@
                     container.classList.add('has-result');
                     container.querySelector('.placeholder-text').style.display = 'none';
                     tg.HapticFeedback.notificationOccurred('success');
-                } else if (type === 'text' && data.imageUrl) {
+                } else if (type === 'poses' && data.imageUrls && data.imageUrls.length) {
+                    const grid = document.getElementById('poses-images-grid');
+                    grid.innerHTML = data.imageUrls.map(url => `<img src="${url}" alt="">`).join('');
+                    grid.classList.add('visible');
+                    container.classList.add('has-result');
+                    container.querySelector('.placeholder-text').style.display = 'none';
+                    tg.HapticFeedback.notificationOccurred('success');
+                } else if ((type === 'text' || type === 'ref') && data.imageUrl) {
                     imgRes.src = data.imageUrl;
                     imgRes.style.display = 'block';
                     container.classList.add('has-result');

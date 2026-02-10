@@ -7,7 +7,7 @@ const axios = require('axios');
 const FormData = require('form-data');
 const multer = require('multer');
 
-const { buildMessages, getModelId, setModelId, getAvailableModels } = require('./prompts');
+const { buildMessages, buildRefPairMessages, getModelId, setModelId, getAvailableModels } = require('./prompts');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -64,6 +64,8 @@ app.post('/api/generate-image', upload.single('image'), async (req, res) => {
         res.status(500).json({ error: 'Ошибка загрузки', details: e.message });
     }
 });
+// Новый режим: генерация по двум фото (референс + основное)
+app.post('/api/generate-refpair', async (req, res) => handleRefPairGeneration(req, res));
 app.post('/api/product-gen', async (req, res) => handleProductGeneration(req, res));
 app.post('/api/product-gen-image', upload.single('image'), async (req, res) => {
     try {
@@ -78,6 +80,25 @@ app.post('/api/product-gen-image', upload.single('image'), async (req, res) => {
         const imageBase64 = `data:${mime};base64,${buffer.toString('base64')}`;
         req.body = { prompt, initData, imageBase64 };
         return handleProductGeneration(req, res);
+    } catch (e) {
+        res.status(500).json({ error: 'Ошибка загрузки', details: e.message });
+    }
+});
+// Новый режим: генерация случайных поз по фото
+app.post('/api/poses-gen-image', upload.single('image'), async (req, res) => {
+    try {
+        const prompt = req.body?.prompt;
+        const initData = req.body?.initData;
+        const count = req.body?.count;
+        const file = req.file;
+        if (!file) {
+            return res.status(400).json({ error: 'Нужно фото человека' });
+        }
+        const buffer = file.buffer;
+        const mime = file.mimetype || 'image/jpeg';
+        const imageBase64 = `data:${mime};base64,${buffer.toString('base64')}`;
+        req.body = { prompt, initData, imageBase64, count };
+        return handlePosesGeneration(req, res);
     } catch (e) {
         res.status(500).json({ error: 'Ошибка загрузки', details: e.message });
     }
@@ -99,9 +120,8 @@ app.put('/api/settings', (req, res) => {
 // Таймаут на один запрос к AI (генерация картинки может занимать 1–2 мин)
 const AI_REQUEST_TIMEOUT_MS = 180000;
 
-async function callAI(prompt, imageBase64, mode) {
+async function callAIWithMessages(messages) {
     const modelId = getModelId();
-    const messages = buildMessages(prompt, imageBase64, mode || 'gen');
     const response = await axios.post(
         'https://openrouter.ai/api/v1/chat/completions',
         { model: modelId, messages },
@@ -126,6 +146,11 @@ async function callAI(prompt, imageBase64, mode) {
         if (img.image_url?.url) return img.image_url.url;
     }
     throw new Error('AI не вернул картинку (пустой ответ).');
+}
+
+async function callAI(prompt, imageBase64, mode) {
+    const messages = buildMessages(prompt, imageBase64, mode || 'gen');
+    return callAIWithMessages(messages);
 }
 
 async function handleProductGeneration(req, res) {
@@ -174,6 +199,55 @@ async function handleProductGeneration(req, res) {
     }
 }
 
+async function handlePosesGeneration(req, res) {
+    if (!process.env.OPENROUTER_API_KEY) {
+        return res.status(500).json({ error: 'Не настроен OPENROUTER_API_KEY. Добавьте ключ в .env' });
+    }
+    // Генерация N поз может занять 1–3 мин
+    res.setTimeout(300000);
+    const { prompt, initData, imageBase64, count } = req.body;
+    const modelId = getModelId();
+    let posesCount = parseInt(count, 10);
+    if (isNaN(posesCount) || posesCount < 1) posesCount = 1;
+    if (posesCount > 10) posesCount = 10;
+
+    debugLog('1. POSES ЗАПРОС', { prompt, hasImage: !!imageBase64, model: modelId, count: posesCount });
+
+    const chatId = getChatId(initData);
+
+    try {
+        const results = await Promise.all(
+            Array(posesCount).fill(null).map(() =>
+                callAI(prompt || 'Generate a random dynamic full-body pose.', imageBase64, 'poses')
+                    .then(url => ({ url, ok: true }))
+                    .catch(err => ({ error: err.message || (err.response?.data && String(err.response.data)), ok: false }))
+            )
+        );
+
+        const imageUrls = results.filter(r => r.ok).map(r => r.url);
+        const failed = results.filter(r => !r.ok).length;
+
+        debugLog('2. POSES РЕЗУЛЬТАТ', { success: imageUrls.length, failed });
+
+        if (imageUrls.length === 0) {
+            const msg = failed ? `Все запросы на позы не вернули картинку.` : 'AI не вернул картинки с позами.';
+            if (chatId) await sendText(chatId, `❌ ${msg}`);
+            return res.json({ error: msg, imageUrls: [] });
+        }
+
+        let sentToChat = false;
+        if (chatId && imageUrls.length) {
+            sentToChat = await sendMediaGroupToTelegram(chatId, imageUrls, prompt || 'Случайные позы');
+        }
+
+        res.json({ imageUrls, sentToChat });
+    } catch (error) {
+        debugLog('POSES ОШИБКА', error.message);
+        if (chatId) await sendText(chatId, `❌ Error: ${error.message.substring(0, 200)}`);
+        res.json({ error: 'Ошибка генерации поз', details: error.message });
+    }
+}
+
 async function handleGeneration(req, res) {
     if (!process.env.OPENROUTER_API_KEY) {
         return res.status(500).json({ error: 'Не настроен OPENROUTER_API_KEY. Добавьте ключ в .env' });
@@ -198,6 +272,38 @@ async function handleGeneration(req, res) {
         debugLog('3. ОШИБКА', error.response?.data || error.message);
         if (chatId) await sendText(chatId, `❌ Error:\n${error.message.substring(0, 200)}`);
         res.json({ error: 'Ошибка генерации', details: error.message });
+    }
+}
+
+async function handleRefPairGeneration(req, res) {
+    if (!process.env.OPENROUTER_API_KEY) {
+        return res.status(500).json({ error: 'Не настроен OPENROUTER_API_KEY. Добавьте ключ в .env' });
+    }
+    const { prompt, initData, refImageBase64, targetImageBase64 } = req.body;
+    const modelId = getModelId();
+    debugLog('1. REFPAIR ЗАПРОС', { prompt, hasRef: !!refImageBase64, hasTarget: !!targetImageBase64, model: modelId });
+
+    if (!prompt || !refImageBase64 || !targetImageBase64) {
+        return res.status(400).json({ error: 'Нужны текстовый запрос и два изображения (референс и основное).' });
+    }
+
+    const chatId = getChatId(initData);
+
+    try {
+        const messages = buildRefPairMessages(prompt, refImageBase64, targetImageBase64);
+        const imageUrl = await callAIWithMessages(messages);
+        debugLog('2. REFPAIR РЕЗУЛЬТАТ', '✅ Картинка получена');
+
+        let sentToChat = false;
+        if (chatId) {
+            sentToChat = await sendToTelegram(chatId, imageUrl, prompt, true);
+        }
+
+        res.json({ imageUrl, sentToChat });
+    } catch (error) {
+        debugLog('REFPAIR ОШИБКА', error.response?.data || error.message);
+        if (chatId) await sendText(chatId, `❌ Error:\n${error.message.substring(0, 200)}`);
+        res.json({ error: 'Ошибка генерации по двум фото', details: error.message });
     }
 }
 

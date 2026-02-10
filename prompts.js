@@ -53,14 +53,20 @@ If you cannot generate an image, output "ERROR: Cannot generate".
 /** Только текст — пользователь описал, что нарисовать. %s = userPrompt */
 const PROMPT_GEN_TEXT = 'Generate a high-quality image of: "%s".';
 
-/** Текст + референс — пользователь прикрепил фото и дал инструкции. %s = userPrompt */
+/** Текст + референс — пользователь прикрепил одно фото и дал инструкции. %s = userPrompt */
 const PROMPT_GEN_WITH_IMAGE = 'Analyze this reference image and generate a NEW high-quality image based on these instructions: "%s". Return ONLY the image.';
 
-// ========== ПРОМПТЫ ФОТОСЕССИИ ==========
-// Используются в «Фотосессия с продуктом» — объект на фото помещается в описанную сцену.
+// ========== ПРОМПТЫ ФОТОСЕССИИ / ПОЗ / ДВА РЕФЕРЕНСА ==========
+// Используются в «Фотосессия с продуктом», «Случайные позы» и «Фото по референсу (2 фото)».
 
 /** Фотосессия: продукт + описание окружения/фона. %s = userPrompt */
 const PROMPT_PRODUCT = 'Place this product photo into a professional product photography scene. Environment and style: "%s". Keep the product clearly visible and well-lit. Return ONLY the image.';
+
+/** Случайные позы: одно фото человека + пожелания. %s = userPrompt (включая количество поз и стили). */
+const PROMPT_POSES = 'Using this person photo as identity reference, generate a NEW pose according to these wishes: "%s". Keep the same person, clothing style and overall look. Return ONLY the image.';
+
+/** Два фото: первое — референс (стиль/ракурс), второе — основное (человек/объект). %s = userPrompt */
+const PROMPT_REF_PAIR = 'You are given TWO images. The FIRST image is a style/composition reference. The SECOND image contains the main subject. Following these instructions: "%s", transform the SECOND image to match the style/angle/mood of the FIRST one, while preserving the identity of the person/object from the SECOND image. Return ONLY the final image.';
 
 /**
  * Подставляет userPrompt в шаблон (поддержка одной подстановки %s).
@@ -70,7 +76,7 @@ function applyPrompt(template, userPrompt) {
 }
 
 /**
- * Собирает сообщения для API. mode: 'gen' | 'product'.
+ * Собирает сообщения для API. mode: 'gen' | 'product' | 'poses'.
  * gen — экран «Фото по промту» (с картинкой или без).
  * product — экран «Фотосессия с продуктом» (всегда с картинкой продукта).
  */
@@ -81,7 +87,11 @@ function buildMessages(userPrompt, imageBase64, mode) {
     ];
 
     if (imageBase64) {
-        const textTemplate = mode === 'product' ? PROMPT_PRODUCT : PROMPT_GEN_WITH_IMAGE;
+        let textTemplate;
+        if (mode === 'product') textTemplate = PROMPT_PRODUCT;
+        else if (mode === 'poses') textTemplate = PROMPT_POSES;
+        else textTemplate = PROMPT_GEN_WITH_IMAGE;
+
         const text = applyPrompt(textTemplate, userPrompt);
         messages.push({
             role: "user",
@@ -99,8 +109,31 @@ function buildMessages(userPrompt, imageBase64, mode) {
     return messages;
 }
 
+/**
+ * Собирает сообщения для режима «Фото по референсу (2 фото)».
+ * Первое изображение — референс (стиль), второе — основа (человек/объект).
+ */
+function buildRefPairMessages(userPrompt, refImageBase64, targetImageBase64) {
+    const messages = [
+        { role: "system", content: SYSTEM_PROMPT }
+    ];
+
+    const text = applyPrompt(PROMPT_REF_PAIR, userPrompt);
+    messages.push({
+        role: "user",
+        content: [
+            { type: "text", text },
+            { type: "image_url", image_url: { url: refImageBase64 } },
+            { type: "image_url", image_url: { url: targetImageBase64 } },
+        ]
+    });
+
+    return messages;
+}
+
 module.exports = {
     buildMessages,
+    buildRefPairMessages,
     getModelId,
     setModelId,
     getAvailableModels,
