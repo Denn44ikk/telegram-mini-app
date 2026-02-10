@@ -48,15 +48,22 @@
         .menu-btn i { font-size: 24px; color: var(--button-color); }
         
         .menu-btn.full-width {
-            grid-column: span 2; height: auto; padding: 30px 20px;
-            font-size: 18px; text-shadow: 0 2px 4px rgba(0,0,0,0.2); color: #fff;
+            grid-column: span 2; height: auto; padding: 22px 18px;
+            font-size: 17px; text-shadow: 0 2px 4px rgba(0,0,0,0.2); color: #fff;
         }
 
+        /* Отдельные цвета для 4 основных инструментов */
         .menu-btn.gradient-warm { background: linear-gradient(135deg, #fce38a 0%, #f38181 100%); }
         .menu-btn.gradient-warm i { color: #fff; font-size: 28px; margin-bottom: 5px; }
 
         .menu-btn.gradient-cool { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
         .menu-btn.gradient-cool i { color: #fff; font-size: 28px; margin-bottom: 5px; }
+
+        .menu-btn.gradient-mint { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+        .menu-btn.gradient-mint i { color: #fff; font-size: 28px; margin-bottom: 5px; }
+
+        .menu-btn.gradient-violet { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .menu-btn.gradient-violet i { color: #fff; font-size: 28px; margin-bottom: 5px; }
 
         /* UI */
         .nav-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
@@ -191,11 +198,11 @@
                 <i class="fa-solid fa-camera-retro"></i>
                 <span>Фотосессия с продуктом</span>
             </button>
-            <button class="menu-btn full-width gradient-warm" onclick="navTo('ref-screen')">
+            <button class="menu-btn full-width gradient-mint" onclick="navTo('ref-screen')">
                 <i class="fa-solid fa-images"></i>
                 <span>Фото по референсу</span>
             </button>
-            <button class="menu-btn full-width gradient-cool" onclick="navTo('poses-screen')">
+            <button class="menu-btn full-width gradient-violet" onclick="navTo('poses-screen')">
                 <i class="fa-solid fa-person-running"></i>
                 <span>Случайные позы</span>
             </button>
