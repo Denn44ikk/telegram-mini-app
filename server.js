@@ -53,14 +53,22 @@ app.post('/api/generate-image', upload.single('image'), async (req, res) => {
         const initData = req.body?.initData;
         const file = req.file;
         if (!prompt || !file) {
+            debugLog('GENERATE-IMAGE ВАЛИДАЦИЯ', { ok: false, reason: 'no prompt or file', hasPrompt: !!prompt, hasFile: !!file });
             return res.status(400).json({ error: 'Нужны prompt и image' });
         }
         const buffer = file.buffer;
         const mime = file.mimetype || 'image/jpeg';
         const imageBase64 = `data:${mime};base64,${buffer.toString('base64')}`;
+        debugLog('GENERATE-IMAGE UPLOAD', {
+            ok: true,
+            promptSnippet: String(prompt).substring(0, 80),
+            mime,
+            size: buffer.length
+        });
         req.body = { prompt, initData, imageBase64 };
         return handleGeneration(req, res);
     } catch (e) {
+        debugLog('GENERATE-IMAGE ERROR', e.message);
         res.status(500).json({ error: 'Ошибка загрузки', details: e.message });
     }
 });
@@ -73,14 +81,22 @@ app.post('/api/product-gen-image', upload.single('image'), async (req, res) => {
         const initData = req.body?.initData;
         const file = req.file;
         if (!prompt || !file) {
+            debugLog('PRODUCT-UPLOAD ВАЛИДАЦИЯ', { ok: false, reason: 'no prompt or file', hasPrompt: !!prompt, hasFile: !!file });
             return res.status(400).json({ error: 'Нужны prompt и image' });
         }
         const buffer = file.buffer;
         const mime = file.mimetype || 'image/jpeg';
         const imageBase64 = `data:${mime};base64,${buffer.toString('base64')}`;
+        debugLog('PRODUCT-UPLOAD', {
+            ok: true,
+            promptSnippet: String(prompt).substring(0, 80),
+            mime,
+            size: buffer.length
+        });
         req.body = { prompt, initData, imageBase64 };
         return handleProductGeneration(req, res);
     } catch (e) {
+        debugLog('PRODUCT-UPLOAD ERROR', e.message);
         res.status(500).json({ error: 'Ошибка загрузки', details: e.message });
     }
 });
@@ -92,14 +108,23 @@ app.post('/api/poses-gen-image', upload.single('image'), async (req, res) => {
         const count = req.body?.count;
         const file = req.file;
         if (!file) {
+            debugLog('POSES-UPLOAD ВАЛИДАЦИЯ', { ok: false, reason: 'no file', hasPrompt: !!prompt, rawCount: count });
             return res.status(400).json({ error: 'Нужно фото человека' });
         }
         const buffer = file.buffer;
         const mime = file.mimetype || 'image/jpeg';
         const imageBase64 = `data:${mime};base64,${buffer.toString('base64')}`;
+        debugLog('POSES-UPLOAD', {
+            ok: true,
+            promptSnippet: String(prompt || '').substring(0, 80),
+            mime,
+            size: buffer.length,
+            rawCount: count
+        });
         req.body = { prompt, initData, imageBase64, count };
         return handlePosesGeneration(req, res);
     } catch (e) {
+        debugLog('POSES-UPLOAD ERROR', e.message);
         res.status(500).json({ error: 'Ошибка загрузки', details: e.message });
     }
 });
@@ -122,6 +147,25 @@ const AI_REQUEST_TIMEOUT_MS = 180000;
 
 async function callAIWithMessages(messages) {
     const modelId = getModelId();
+    // Логируем только кратко: количество сообщений и наличие картинок, без base64
+    try {
+        const safeMessages = messages.map((m, idx) => {
+            const entry = { role: m.role, idx };
+            if (Array.isArray(m.content)) {
+                entry.parts = m.content.map((c) => ({
+                    type: c.type || (typeof c === 'string' ? 'text' : 'unknown'),
+                    hasImageUrl: !!(c.image_url && c.image_url.url),
+                    textSnippet: c.text ? String(c.text).substring(0, 60) : undefined
+                }));
+            } else if (typeof m.content === 'string') {
+                entry.textSnippet = m.content.substring(0, 80);
+            }
+            return entry;
+        });
+        debugLog('AI CALL PREPARE', { modelId, messagesCount: messages.length, messages: safeMessages });
+    } catch (e) {
+        debugLog('AI CALL PREPARE ERROR', e.message);
+    }
     const response = await axios.post(
         'https://openrouter.ai/api/v1/chat/completions',
         { model: modelId, messages },
@@ -136,15 +180,33 @@ async function callAIWithMessages(messages) {
     );
     const choice = response.data.choices?.[0]?.message;
     const content = choice?.content || "";
+    debugLog('AI RAW RESPONSE META', {
+        hasContent: !!content,
+        contentSnippet: typeof content === 'string' ? content.substring(0, 120) : '[non-string]',
+        hasImagesArray: Array.isArray(choice?.images) && choice.images.length > 0
+    });
     const base64Match = content.match(/(data:image\/[a-zA-Z]*;base64,[^\s"\)]+)/);
     const urlMatch = content.match(/(https?:\/\/[^\s\)]+)/);
-    if (base64Match) return base64Match[1];
-    if (urlMatch) return urlMatch[1];
+    if (base64Match) {
+        debugLog('AI PARSE', { type: 'base64', length: base64Match[1].length });
+        return base64Match[1];
+    }
+    if (urlMatch) {
+        debugLog('AI PARSE', { type: 'url', urlSnippet: urlMatch[1].substring(0, 120) });
+        return urlMatch[1];
+    }
     if (choice?.images?.length) {
         const img = choice.images[0];
-        if (img.url) return img.url;
-        if (img.image_url?.url) return img.image_url.url;
+        if (img.url) {
+            debugLog('AI PARSE', { type: 'images[0].url', urlSnippet: img.url.substring(0, 120) });
+            return img.url;
+        }
+        if (img.image_url?.url) {
+            debugLog('AI PARSE', { type: 'images[0].image_url.url', urlSnippet: img.image_url.url.substring(0, 120) });
+            return img.image_url.url;
+        }
     }
+    debugLog('AI PARSE ERROR', 'AI не вернул распознаваемый url/base64');
     throw new Error('AI не вернул картинку (пустой ответ).');
 }
 
