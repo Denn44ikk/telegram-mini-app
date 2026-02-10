@@ -496,15 +496,31 @@
         }
 
         window.addEventListener('paste', e => {
-            uiLog('paste:event', { hasClipboardData: !!(e.clipboardData || e.originalEvent?.clipboardData) });
-            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            const cd = e.clipboardData || (e.originalEvent && e.originalEvent.clipboardData);
+            uiLog('paste:event', { hasClipboardData: !!cd });
+
             let blob = null;
-            for (let i = 0; i < items.length; i++) {
-                if (items[i].type.indexOf("image") === 0) {
-                    blob = items[i].getAsFile();
-                    break;
+            if (cd && cd.items && cd.items.length) {
+                const types = [];
+                for (let i = 0; i < cd.items.length; i++) {
+                    types.push(cd.items[i].type);
+                    if (cd.items[i].type.indexOf("image") === 0) {
+                        blob = cd.items[i].getAsFile();
+                        break;
+                    }
+                }
+                uiLog('paste:items', { types });
+            }
+
+            // Fallback: некоторые клиенты кладут изображение только в files
+            if (!blob && cd && cd.files && cd.files.length) {
+                const file = cd.files[0];
+                if (file.type && file.type.indexOf('image') === 0) {
+                    blob = file;
+                    uiLog('paste:fallbackFile', { type: file.type, size: file.size });
                 }
             }
+
             if (blob) {
                 // Если пользователь явно кликнул по зоне — уважаем выбор
                 if (activePasteTarget) {
@@ -512,7 +528,7 @@
                     uiLog('paste:handledByActiveTarget', { target: activePasteTarget });
                     return;
                 }
-                // Иначе — по активному экрану, как раньше
+                // Иначе — по активному экрану, но аккуратнее для экрана референсов
                 if (document.getElementById('gen-screen').classList.contains('active')) {
                     handlePastedImage(blob, 'gen');
                 } else if (document.getElementById('product-screen').classList.contains('active')) {
@@ -520,8 +536,15 @@
                 } else if (document.getElementById('poses-screen').classList.contains('active')) {
                     handlePastedImage(blob, 'poses');
                 } else if (document.getElementById('ref-screen').classList.contains('active')) {
-                    handlePastedImage(blob, 'ref-style');
+                    // Если стиль ещё не задан — вставляем туда, иначе в основное фото
+                    const hasStyle = !!pastedFiles.refStyle || !!document.getElementById('ref-style-preview').src;
+                    const hasTarget = !!pastedFiles.refTarget || !!document.getElementById('ref-target-preview').src;
+                    const target = !hasStyle ? 'ref-style' : (!hasTarget ? 'ref-target' : 'ref-style');
+                    handlePastedImage(blob, target);
+                    uiLog('paste:ref-autoTarget', { target, hasStyle, hasTarget });
                 }
+            } else {
+                uiLog('paste:noImageFound', { hasClipboardData: !!cd });
             }
             uiLog('paste:done', { handled: !!blob });
         });
