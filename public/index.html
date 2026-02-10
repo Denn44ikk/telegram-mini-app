@@ -167,6 +167,11 @@
             background: var(--bg-color); color: var(--text-color); font-size: 16px;
         }
         .settings-saved { color: var(--button-color); font-size: 13px; margin-top: 10px; display: none; }
+
+        /* Чтобы поля ввода не вылезали за границы карточек */
+        input[type="number"] {
+            box-sizing: border-box;
+        }
     </style>
 </head>
 <body>
@@ -186,11 +191,11 @@
                 <i class="fa-solid fa-camera-retro"></i>
                 <span>Фотосессия с продуктом</span>
             </button>
-            <button class="menu-btn" onclick="navTo('ref-screen')">
+            <button class="menu-btn full-width gradient-warm" onclick="navTo('ref-screen')">
                 <i class="fa-solid fa-images"></i>
                 <span>Фото по референсу</span>
             </button>
-            <button class="menu-btn" onclick="navTo('poses-screen')">
+            <button class="menu-btn full-width gradient-cool" onclick="navTo('poses-screen')">
                 <i class="fa-solid fa-person-running"></i>
                 <span>Случайные позы</span>
             </button>
