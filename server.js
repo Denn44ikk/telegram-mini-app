@@ -157,15 +157,15 @@ app.put('/api/settings', (req, res) => {
 });
 
 // Баланс / рефералка
-app.get('/api/balance', (req, res) => {
+app.get('/api/balance', async (req, res) => {
     try {
         const initData = req.query.initData;
-        const user = getOrCreateUser(initData, null);
+        const user = await getOrCreateUser(initData, null);
         if (!user) {
             return res.status(400).json({ error: 'Не удалось распарсить пользователя из initData' });
         }
-        const balance = getBalance(user.telegram_user_id);
-        const ref = getReferralStats(user.telegram_user_id);
+        const balance = await getBalance(user.telegram_user_id);
+        const ref = await getReferralStats(user.telegram_user_id);
         res.json({
             balance,
             refCode: ref.refCode,
@@ -177,23 +177,23 @@ app.get('/api/balance', (req, res) => {
 });
 
 // === ADMIN API: список юзеров и правка баланса ===
-app.get('/api/admin/users', adminGuard, (req, res) => {
+app.get('/api/admin/users', adminGuard, async (req, res) => {
     try {
-        const users = listUsersWithRefs();
+        const users = await listUsersWithRefs();
         res.json({ users });
     } catch (e) {
         res.status(500).json({ error: 'Ошибка чтения пользователей', details: e.message });
     }
 });
 
-app.post('/api/admin/set-balance', adminGuard, (req, res) => {
+app.post('/api/admin/set-balance', adminGuard, async (req, res) => {
     try {
         const { telegram_user_id, balance } = req.body || {};
         const parsedBalance = parseInt(balance, 10);
         if (!telegram_user_id || isNaN(parsedBalance)) {
             return res.status(400).json({ error: 'Нужны telegram_user_id и целочисленный balance' });
         }
-        const ok = setUserBalance(telegram_user_id, parsedBalance);
+        const ok = await setUserBalance(telegram_user_id, parsedBalance);
         if (!ok) return res.status(404).json({ error: 'Пользователь не найден' });
         res.json({ success: true });
     } catch (e) {
@@ -286,7 +286,7 @@ async function handleProductGeneration(req, res) {
 
     const chatId = getChatId(initData);
     // Регистрируем / обновляем юзера и его чат
-    try { initDb(); getOrCreateUser(initData, chatId); } catch (e) { debugLog('DB USER ERROR PRODUCT', e.message); }
+    try { await initDb(); await getOrCreateUser(initData, chatId); } catch (e) { debugLog('DB USER ERROR PRODUCT', e.message); }
 
     try {
         // Все 5 фото генерируются параллельно — быстрее по времени
@@ -337,7 +337,7 @@ async function handlePosesGeneration(req, res) {
     debugLog('1. POSES ЗАПРОС', { prompt, hasImage: !!imageBase64, model: modelId, count: posesCount });
 
     const chatId = getChatId(initData);
-    try { initDb(); getOrCreateUser(initData, chatId); } catch (e) { debugLog('DB USER ERROR POSES', e.message); }
+    try { await initDb(); await getOrCreateUser(initData, chatId); } catch (e) { debugLog('DB USER ERROR POSES', e.message); }
 
     try {
         const results = await Promise.all(
@@ -381,7 +381,7 @@ async function handleGeneration(req, res) {
     debugLog('1. ЗАПРОС', { prompt, hasImage: !!imageBase64, model: modelId });
 
     const chatId = getChatId(initData);
-    try { initDb(); getOrCreateUser(initData, chatId); } catch (e) { debugLog('DB USER ERROR GEN', e.message); }
+    try { await initDb(); await getOrCreateUser(initData, chatId); } catch (e) { debugLog('DB USER ERROR GEN', e.message); }
 
     try {
         const imageUrl = await callAI(prompt, imageBase64, 'gen');
@@ -413,7 +413,7 @@ async function handleRefPairGeneration(req, res) {
     }
 
     const chatId = getChatId(initData);
-    try { initDb(); getOrCreateUser(initData, chatId); } catch (e) { debugLog('DB USER ERROR REFPAIR', e.message); }
+    try { await initDb(); await getOrCreateUser(initData, chatId); } catch (e) { debugLog('DB USER ERROR REFPAIR', e.message); }
 
     try {
         let imageUrl;

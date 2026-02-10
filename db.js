@@ -1,39 +1,51 @@
-const path = require('path');
-const Database = require('better-sqlite3');
+const mysql = require('mysql2/promise');
 
-const DB_PATH = path.join(__dirname, 'db.sqlite');
+let pool;
 
-let db;
+async function initDb() {
+    if (pool) return pool;
 
-function initDb() {
-    if (db) return db;
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
+    pool = mysql.createPool({
+        host: process.env.DB_HOST || 'localhost',
+        port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME,
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0
+    });
 
-    db.exec(`
+    // Инициализируем схему, если её ещё нет
+    await pool.query(`
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            telegram_user_id TEXT UNIQUE,
-            chat_id TEXT,
-            username TEXT,
-            first_name TEXT,
-            last_name TEXT,
-            balance INTEGER DEFAULT 0,
-            ref_code TEXT UNIQUE,
-            referred_by TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS referrals (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            referrer_user_id TEXT NOT NULL,
-            referred_user_id TEXT NOT NULL,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        );
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            telegram_user_id VARCHAR(64) UNIQUE,
+            chat_id VARCHAR(64),
+            username VARCHAR(255),
+            first_name VARCHAR(255),
+            last_name VARCHAR(255),
+            balance INT DEFAULT 0,
+            ref_code VARCHAR(64) UNIQUE,
+            referred_by VARCHAR(64),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            KEY idx_users_telegram_id (telegram_user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
-    return db;
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS referrals (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            referrer_user_id VARCHAR(64) NOT NULL,
+            referred_user_id VARCHAR(64) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_referrals_referrer (referrer_user_id),
+            KEY idx_referrals_referred (referred_user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    return pool;
 }
 
 function generateRefCode(telegramUserId) {
@@ -54,98 +66,110 @@ function parseInitData(initData) {
     }
 }
 
-function getOrCreateUser(initData, chatIdFromMessage) {
-    const db = initDb();
+async function getOrCreateUser(initData, chatIdFromMessage) {
+    const db = await initDb();
     const { user, startParam } = parseInitData(initData);
     if (!user) return null;
 
     const telegramUserId = String(user.id);
     const chatId = chatIdFromMessage || String(user.id);
 
-    const selectStmt = db.prepare('SELECT * FROM users WHERE telegram_user_id = ?');
-    let row = selectStmt.get(telegramUserId);
+    const [rows] = await db.execute('SELECT * FROM users WHERE telegram_user_id = ?', [telegramUserId]);
+    let row = rows[0];
 
     let refCode;
     if (!row) {
         refCode = generateRefCode(telegramUserId);
         const referredBy = startParam || null;
-        const insertStmt = db.prepare(`
-            INSERT INTO users (telegram_user_id, chat_id, username, first_name, last_name, balance, ref_code, referred_by)
-            VALUES (@telegram_user_id, @chat_id, @username, @first_name, @last_name, @balance, @ref_code, @referred_by)
-        `);
-        insertStmt.run({
-            telegram_user_id: telegramUserId,
-            chat_id: chatId,
-            username: user.username || null,
-            first_name: user.first_name || null,
-            last_name: user.last_name || null,
-            balance: 0,
-            ref_code: refCode,
-            referred_by: referredBy
-        });
-        row = selectStmt.get(telegramUserId);
+        await db.execute(
+            `INSERT INTO users (telegram_user_id, chat_id, username, first_name, last_name, balance, ref_code, referred_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                telegramUserId,
+                chatId,
+                user.username || null,
+                user.first_name || null,
+                user.last_name || null,
+                0,
+                refCode,
+                referredBy
+            ]
+        );
+
+        const [rowsAfterInsert] = await db.execute('SELECT * FROM users WHERE telegram_user_id = ?', [telegramUserId]);
+        row = rowsAfterInsert[0];
 
         // Реферальный бонус при первом входе
         if (referredBy) {
-            const referrer = db.prepare('SELECT * FROM users WHERE ref_code = ?').get(referredBy);
+            const [refRows] = await db.execute('SELECT * FROM users WHERE ref_code = ?', [referredBy]);
+            const referrer = refRows[0];
             if (referrer) {
                 const BONUS_REFERRER = 10;
                 const BONUS_NEW = 5;
-                db.prepare('UPDATE users SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP WHERE telegram_user_id = ?')
-                    .run(BONUS_REFERRER, referrer.telegram_user_id);
-                db.prepare('UPDATE users SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP WHERE telegram_user_id = ?')
-                    .run(BONUS_NEW, telegramUserId);
-                db.prepare('INSERT INTO referrals (referrer_user_id, referred_user_id) VALUES (?, ?)')
-                    .run(referrer.telegram_user_id, telegramUserId);
+                await db.execute(
+                    'UPDATE users SET balance = balance + ? WHERE telegram_user_id = ?',
+                    [BONUS_REFERRER, referrer.telegram_user_id]
+                );
+                await db.execute(
+                    'UPDATE users SET balance = balance + ? WHERE telegram_user_id = ?',
+                    [BONUS_NEW, telegramUserId]
+                );
+                await db.execute(
+                    'INSERT INTO referrals (referrer_user_id, referred_user_id) VALUES (?, ?)',
+                    [referrer.telegram_user_id, telegramUserId]
+                );
             }
         }
     } else {
         // Обновляем chat_id/имена на всякий случай
-        db.prepare(`
-            UPDATE users
-            SET chat_id = @chat_id,
-                username = @username,
-                first_name = @first_name,
-                last_name = @last_name,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE telegram_user_id = @telegram_user_id
-        `).run({
-            telegram_user_id: telegramUserId,
-            chat_id: chatId,
-            username: user.username || null,
-            first_name: user.first_name || null,
-            last_name: user.last_name || null
-        });
-        row = selectStmt.get(telegramUserId);
+        await db.execute(
+            `UPDATE users
+             SET chat_id = ?, username = ?, first_name = ?, last_name = ?
+             WHERE telegram_user_id = ?`,
+            [
+                chatId,
+                user.username || null,
+                user.first_name || null,
+                user.last_name || null,
+                telegramUserId
+            ]
+        );
+        const [rowsAfterUpdate] = await db.execute('SELECT * FROM users WHERE telegram_user_id = ?', [telegramUserId]);
+        row = rowsAfterUpdate[0];
     }
 
     return row;
 }
 
-function getUserByTelegramId(telegramUserId) {
-    const db = initDb();
-    return db.prepare('SELECT * FROM users WHERE telegram_user_id = ?').get(String(telegramUserId));
+async function getUserByTelegramId(telegramUserId) {
+    const db = await initDb();
+    const [rows] = await db.execute('SELECT * FROM users WHERE telegram_user_id = ?', [String(telegramUserId)]);
+    return rows[0] || null;
 }
 
-function getBalance(telegramUserId) {
-    const user = getUserByTelegramId(telegramUserId);
+async function getBalance(telegramUserId) {
+    const user = await getUserByTelegramId(telegramUserId);
     return user ? user.balance : 0;
 }
 
-function getReferralStats(telegramUserId) {
-    const db = initDb();
-    const user = getUserByTelegramId(telegramUserId);
+async function getReferralStats(telegramUserId) {
+    const db = await initDb();
+    const user = await getUserByTelegramId(telegramUserId);
     if (!user) return { refCode: null, referredCount: 0 };
-    const countRow = db.prepare('SELECT COUNT(*) as cnt FROM referrals WHERE referrer_user_id = ?').get(String(telegramUserId));
+    const [rows] = await db.execute(
+        'SELECT COUNT(*) as cnt FROM referrals WHERE referrer_user_id = ?',
+        [String(telegramUserId)]
+    );
+    const countRow = rows[0] || { cnt: 0 };
     return {
         refCode: user.ref_code,
         referredCount: countRow.cnt || 0
     };
 }
 
-function listUsersWithRefs() {
-    const db = initDb();
-    const rows = db.prepare(`
+async function listUsersWithRefs() {
+    const db = await initDb();
+    const [rows] = await db.query(`
         SELECT 
             u.id,
             u.telegram_user_id,
@@ -166,15 +190,17 @@ function listUsersWithRefs() {
             GROUP BY referrer_user_id
         ) r ON r.referrer_user_id = u.telegram_user_id
         ORDER BY u.created_at DESC
-    `).all();
+    `);
     return rows;
 }
 
-function setUserBalance(telegramUserId, newBalance) {
-    const db = initDb();
-    const stmt = db.prepare('UPDATE users SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE telegram_user_id = ?');
-    const info = stmt.run(newBalance, String(telegramUserId));
-    return info.changes > 0;
+async function setUserBalance(telegramUserId, newBalance) {
+    const db = await initDb();
+    const [result] = await db.execute(
+        'UPDATE users SET balance = ? WHERE telegram_user_id = ?',
+        [newBalance, String(telegramUserId)]
+    );
+    return result.affectedRows > 0;
 }
 
 module.exports = {
