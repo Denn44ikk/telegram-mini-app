@@ -414,8 +414,8 @@ async function sendMediaGroupToTelegram(chatId, imageUrls, caption) {
             const media = [];
             for (let i = 0; i < imageUrls.length; i++) {
                 const url = imageUrls[i];
-                const key = `photo${i}`;
-                media.push({ type: 'photo', media: `attach://${key}`, caption: i === 0 ? captionText : undefined });
+                const key = `file${i}`;
+                media.push({ type: 'document', media: `attach://${key}`, caption: i === 0 ? captionText : undefined });
                 if (url.startsWith('data:')) {
                     const base64 = url.split(';base64,').pop();
                     form.append(key, Buffer.from(fixBase64(base64), 'base64'), { filename: 'gen.png' });
@@ -428,7 +428,7 @@ async function sendMediaGroupToTelegram(chatId, imageUrls, caption) {
             await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/sendMediaGroup`, form, { headers: form.getHeaders() });
         } else {
             const media = imageUrls.map((url, i) => ({
-                type: 'photo',
+                type: 'document',
                 media: url,
                 caption: i === 0 ? captionText : undefined
             }));
