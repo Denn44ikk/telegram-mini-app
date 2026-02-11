@@ -156,22 +156,80 @@ app.put('/api/settings', (req, res) => {
     }
 });
 
+// === TELEGRAM WEBHOOK: обработка сообщений бота ===
+app.post('/api/telegram-webhook', async (req, res) => {
+    try {
+        const update = req.body;
+        debugLog('TELEGRAM WEBHOOK', { 
+            hasMessage: !!update.message,
+            hasCallbackQuery: !!update.callback_query,
+            messageText: update.message?.text
+        });
+
+        if (update.message) {
+            const chatId = update.message.chat.id;
+            const text = update.message.text || '';
+            const user = update.message.from;
+
+            // Обработка команды /start
+            if (text.startsWith('/start')) {
+                const startParam = text.split(' ')[1] || null;
+                debugLog('TELEGRAM /start', { chatId, userId: user.id, startParam });
+
+                // Создаём/обновляем пользователя в БД (если есть start_param, сохраняем его)
+                try {
+                    // Формируем initData-подобную строку для сохранения рефера
+                    const fakeInitData = startParam 
+                        ? `user=${encodeURIComponent(JSON.stringify(user))}&start_param=${startParam}`
+                        : `user=${encodeURIComponent(JSON.stringify(user))}`;
+                    
+                    await initDb();
+                    await getOrCreateUser(fakeInitData, chatId);
+                } catch (e) {
+                    debugLog('TELEGRAM /start DB ERROR', e.message);
+                }
+
+                const welcomeText = `👋 Привет, ${user.first_name || 'друг'}!\n\n` +
+                    `Добро пожаловать в наш бот для генерации изображений! 🎨\n\n` +
+                    `Чтобы воспользоваться всеми возможностями бота, откройте мини-приложение через кнопку ниже 👇`;
+
+                await sendText(chatId, welcomeText);
+                await sendText(chatId, 'Чтобы воспользоваться нашим ботом — откройте мини-приложение! 🚀');
+            } 
+            // Обработка обычных сообщений
+            else if (text.trim()) {
+                debugLog('TELEGRAM MESSAGE', { chatId, userId: user.id, text: text.substring(0, 50) });
+                await sendText(chatId, 'Чтобы воспользоваться нашим ботом — откройте мини-приложение! 🚀');
+            }
+        }
+
+        res.json({ ok: true });
+    } catch (e) {
+        debugLog('TELEGRAM WEBHOOK ERROR', e.message);
+        res.status(500).json({ ok: false, error: e.message });
+    }
+});
+
 // Баланс / рефералка
 app.get('/api/balance', async (req, res) => {
     try {
         const initData = req.query.initData;
+        debugLog('API BALANCE', { hasInitData: !!initData });
         const user = await getOrCreateUser(initData, null);
         if (!user) {
+            debugLog('API BALANCE', '❌ Failed to parse user from initData');
             return res.status(400).json({ error: 'Не удалось распарсить пользователя из initData' });
         }
         const balance = await getBalance(user.telegram_user_id);
         const ref = await getReferralStats(user.telegram_user_id);
+        debugLog('API BALANCE', { userId: user.telegram_user_id, balance, refCode: ref.refCode });
         res.json({
             balance,
             refCode: ref.refCode,
             referredCount: ref.referredCount
         });
     } catch (e) {
+        debugLog('API BALANCE ERROR', e.message);
         res.status(500).json({ error: 'Ошибка чтения баланса', details: e.message });
     }
 });
@@ -286,7 +344,13 @@ async function handleProductGeneration(req, res) {
 
     const chatId = getChatId(initData);
     // Регистрируем / обновляем юзера и его чат
-    try { await initDb(); await getOrCreateUser(initData, chatId); } catch (e) { debugLog('DB USER ERROR PRODUCT', e.message); }
+    try { 
+        await initDb(); 
+        const user = await getOrCreateUser(initData, chatId);
+        debugLog('PRODUCT USER', { created: !!user, userId: user?.telegram_user_id });
+    } catch (e) { 
+        debugLog('DB USER ERROR PRODUCT', { error: e.message, stack: e.stack }); 
+    }
 
     try {
         // Все 5 фото генерируются параллельно — быстрее по времени
@@ -337,7 +401,13 @@ async function handlePosesGeneration(req, res) {
     debugLog('1. POSES ЗАПРОС', { prompt, hasImage: !!imageBase64, model: modelId, count: posesCount });
 
     const chatId = getChatId(initData);
-    try { await initDb(); await getOrCreateUser(initData, chatId); } catch (e) { debugLog('DB USER ERROR POSES', e.message); }
+    try { 
+        await initDb(); 
+        const user = await getOrCreateUser(initData, chatId);
+        debugLog('POSES USER', { created: !!user, userId: user?.telegram_user_id });
+    } catch (e) { 
+        debugLog('DB USER ERROR POSES', { error: e.message, stack: e.stack }); 
+    }
 
     try {
         const results = await Promise.all(
@@ -381,7 +451,13 @@ async function handleGeneration(req, res) {
     debugLog('1. ЗАПРОС', { prompt, hasImage: !!imageBase64, model: modelId });
 
     const chatId = getChatId(initData);
-    try { await initDb(); await getOrCreateUser(initData, chatId); } catch (e) { debugLog('DB USER ERROR GEN', e.message); }
+    try { 
+        await initDb(); 
+        const user = await getOrCreateUser(initData, chatId);
+        debugLog('GEN USER', { created: !!user, userId: user?.telegram_user_id });
+    } catch (e) { 
+        debugLog('DB USER ERROR GEN', { error: e.message, stack: e.stack }); 
+    }
 
     try {
         const imageUrl = await callAI(prompt, imageBase64, 'gen');
@@ -413,7 +489,13 @@ async function handleRefPairGeneration(req, res) {
     }
 
     const chatId = getChatId(initData);
-    try { await initDb(); await getOrCreateUser(initData, chatId); } catch (e) { debugLog('DB USER ERROR REFPAIR', e.message); }
+    try { 
+        await initDb(); 
+        const user = await getOrCreateUser(initData, chatId);
+        debugLog('REFPAIR USER', { created: !!user, userId: user?.telegram_user_id });
+    } catch (e) { 
+        debugLog('DB USER ERROR REFPAIR', { error: e.message, stack: e.stack }); 
+    }
 
     try {
         let imageUrl;
