@@ -24,6 +24,23 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' })); 
 app.use(express.static(publicPath));
 
+// Логирование всех входящих запросов для отладки webhook
+app.use((req, res, next) => {
+    if (req.path === '/api/telegram-webhook') {
+        debugLog('INCOMING REQUEST', {
+            method: req.method,
+            path: req.path,
+            headers: {
+                'content-type': req.headers['content-type'],
+                'user-agent': req.headers['user-agent']
+            },
+            bodyExists: !!req.body,
+            bodyKeys: req.body ? Object.keys(req.body) : []
+        });
+    }
+    next();
+});
+
 // === ДЕБАГ ЛОГГЕР ===
 function debugLog(stepName, data) {
     const time = new Date().toLocaleTimeString('ru-RU');
@@ -56,7 +73,22 @@ function adminGuard(req, res, next) {
 // === API ENDPOINTS ===
 app.get('/api/health', (req, res) => {
     const hasKey = !!process.env.OPENROUTER_API_KEY;
-    res.json({ ok: true, openrouter: hasKey ? 'ok' : 'missing' });
+    const hasToken = !!process.env.TELEGRAM_BOT_TOKEN;
+    res.json({ 
+        ok: true, 
+        openrouter: hasKey ? 'ok' : 'missing',
+        telegram: hasToken ? 'ok' : 'missing',
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Тестовый endpoint для проверки webhook
+app.get('/api/telegram-webhook', (req, res) => {
+    res.json({ 
+        ok: true, 
+        message: 'Webhook endpoint is accessible. Use POST method for Telegram updates.',
+        hasToken: !!process.env.TELEGRAM_BOT_TOKEN
+    });
 });
 
 app.post('/api/generate', async (req, res) => handleGeneration(req, res));
@@ -159,11 +191,19 @@ app.put('/api/settings', (req, res) => {
 // === TELEGRAM WEBHOOK: обработка сообщений бота ===
 app.post('/api/telegram-webhook', async (req, res) => {
     try {
+        console.log('\n🔔 WEBHOOK RECEIVED - RAW BODY:', JSON.stringify(req.body, null, 2));
         const update = req.body;
+        
+        if (!update) {
+            debugLog('TELEGRAM WEBHOOK', '❌ No body received');
+            return res.status(400).json({ ok: false, error: 'No body' });
+        }
+
         debugLog('TELEGRAM WEBHOOK', { 
             hasMessage: !!update.message,
             hasCallbackQuery: !!update.callback_query,
-            messageText: update.message?.text
+            messageText: update.message?.text,
+            updateId: update.update_id
         });
 
         if (update.message) {
@@ -205,7 +245,12 @@ app.post('/api/telegram-webhook', async (req, res) => {
 
         res.json({ ok: true });
     } catch (e) {
-        debugLog('TELEGRAM WEBHOOK ERROR', e.message);
+        console.error('\n❌ WEBHOOK ERROR:', e);
+        debugLog('TELEGRAM WEBHOOK ERROR', { 
+            message: e.message, 
+            stack: e.stack,
+            body: req.body 
+        });
         res.status(500).json({ ok: false, error: e.message });
     }
 });
@@ -545,8 +590,26 @@ function fixBase64(str) {
 
 async function sendText(chatId, text) {
     try {
-        await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, { chat_id: chatId, text: text });
-    } catch (e) {}
+        if (!TG_TOKEN) {
+            debugLog('SEND_TEXT ERROR', 'TELEGRAM_BOT_TOKEN not set in .env');
+            return false;
+        }
+        debugLog('SEND_TEXT', { chatId, textLength: text.length, textSnippet: text.substring(0, 100) });
+        const response = await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, { 
+            chat_id: chatId, 
+            text: text 
+        });
+        debugLog('SEND_TEXT SUCCESS', { messageId: response.data?.result?.message_id });
+        return true;
+    } catch (e) {
+        debugLog('SEND_TEXT ERROR', { 
+            error: e.message,
+            response: e.response?.data,
+            chatId,
+            hasToken: !!TG_TOKEN
+        });
+        return false;
+    }
 }
 
 async function sendMediaGroupToTelegram(chatId, imageUrls, caption) {
