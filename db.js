@@ -342,6 +342,22 @@ async function setUserBalance(telegramUserId, newBalance) {
     }
 }
 
+async function adjustUserBalance(telegramUserId, delta) {
+    try {
+        dbLog('ADJUST_USER_BALANCE', { telegramUserId, delta });
+        const db = await initDb();
+        await db.execute(
+            'UPDATE users SET balance = balance + ? WHERE telegram_user_id = ?',
+            [delta, String(telegramUserId)]
+        );
+        const user = await getUserByTelegramId(telegramUserId);
+        return user;
+    } catch (error) {
+        dbLog('ADJUST_USER_BALANCE ERROR', { error: error.message });
+        throw error;
+    }
+}
+
 module.exports = {
     initDb,
     getOrCreateUser,
@@ -349,6 +365,7 @@ module.exports = {
     getBalance,
     getReferralStats,
     listUsersWithRefs,
-    setUserBalance
+    setUserBalance,
+    adjustUserBalance
 };
 
