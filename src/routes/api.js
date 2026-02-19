@@ -7,6 +7,14 @@ const { adminGuard } = require('../middleware/adminGuard');
 const { telegramWebhookGuard } = require('../middleware/telegramWebhookGuard');
 const { handleTelegramWebhook } = require('../handlers/telegramWebhook');
 const {
+    createSBPPayment,
+    createCryptoPayment,
+    verifyPayment,
+    getPaymentHistory,
+    MIN_AMOUNT,
+    MAX_AMOUNT
+} = require('../services/payment');
+const {
     handleGeneration,
     handleProductGeneration,
     handlePosesGeneration,
@@ -200,5 +208,172 @@ router.post('/admin/set-balance', adminGuard, async (req, res) => {
 });
 
 router.post('/send-file', async (req, res) => { res.json({ success: false }); });
+
+// ========== ПЛАТЕЖНАЯ СИСТЕМА ==========
+
+/**
+ * Создание платежа через СБП
+ * POST /api/payment/sbp
+ * Body: { initData, amount }
+ */
+router.post('/payment/sbp', async (req, res) => {
+    try {
+        const { initData, amount } = req.body || {};
+        const amountNum = parseFloat(amount);
+
+        if (!initData) {
+            return res.status(400).json({ error: 'Нужен initData' });
+        }
+
+        if (!amount || isNaN(amountNum) || amountNum < MIN_AMOUNT || amountNum > MAX_AMOUNT) {
+            return res.status(400).json({ 
+                error: `Сумма должна быть от ${MIN_AMOUNT} до ${MAX_AMOUNT} рублей` 
+            });
+        }
+
+        const user = await getOrCreateUser(initData, null);
+        if (!user) {
+            return res.status(400).json({ error: 'Не удалось распарсить пользователя из initData' });
+        }
+
+        const result = await createSBPPayment(user.telegram_user_id, amountNum);
+        
+        if (!result.success) {
+            return res.status(400).json({ error: result.error });
+        }
+
+        debugLog('API PAYMENT SBP', {
+            userId: user.telegram_user_id,
+            amount: amountNum,
+            paymentId: result.payment.paymentId
+        });
+
+        res.json(result);
+    } catch (e) {
+        debugLog('API PAYMENT SBP ERROR', e.message);
+        res.status(500).json({ error: 'Ошибка создания платежа СБП', details: e.message });
+    }
+});
+
+/**
+ * Создание платежа через криптовалюту
+ * POST /api/payment/crypto
+ * Body: { initData, amount, cryptoType }
+ */
+router.post('/payment/crypto', async (req, res) => {
+    try {
+        const { initData, amount, cryptoType = 'USDT' } = req.body || {};
+        const amountNum = parseFloat(amount);
+
+        if (!initData) {
+            return res.status(400).json({ error: 'Нужен initData' });
+        }
+
+        if (!amount || isNaN(amountNum) || amountNum < MIN_AMOUNT || amountNum > MAX_AMOUNT) {
+            return res.status(400).json({ 
+                error: `Сумма должна быть от ${MIN_AMOUNT} до ${MAX_AMOUNT} рублей` 
+            });
+        }
+
+        const user = await getOrCreateUser(initData, null);
+        if (!user) {
+            return res.status(400).json({ error: 'Не удалось распарсить пользователя из initData' });
+        }
+
+        const result = await createCryptoPayment(user.telegram_user_id, amountNum, cryptoType);
+        
+        if (!result.success) {
+            return res.status(400).json({ error: result.error });
+        }
+
+        debugLog('API PAYMENT CRYPTO', {
+            userId: user.telegram_user_id,
+            amount: amountNum,
+            cryptoType,
+            paymentId: result.payment.paymentId
+        });
+
+        res.json(result);
+    } catch (e) {
+        debugLog('API PAYMENT CRYPTO ERROR', e.message);
+        res.status(500).json({ error: 'Ошибка создания криптоплатежа', details: e.message });
+    }
+});
+
+/**
+ * Проверка статуса платежа
+ * GET /api/payment/verify?paymentId=...&initData=...
+ */
+router.get('/payment/verify', async (req, res) => {
+    try {
+        const { paymentId, initData } = req.query;
+
+        if (!paymentId || !initData) {
+            return res.status(400).json({ error: 'Нужны paymentId и initData' });
+        }
+
+        const user = await getOrCreateUser(initData, null);
+        if (!user) {
+            return res.status(400).json({ error: 'Не удалось распарсить пользователя из initData' });
+        }
+
+        const result = await verifyPayment(paymentId, user.telegram_user_id);
+        
+        debugLog('API PAYMENT VERIFY', {
+            userId: user.telegram_user_id,
+            paymentId,
+            success: result.success
+        });
+
+        res.json(result);
+    } catch (e) {
+        debugLog('API PAYMENT VERIFY ERROR', e.message);
+        res.status(500).json({ error: 'Ошибка проверки платежа', details: e.message });
+    }
+});
+
+/**
+ * История платежей пользователя
+ * GET /api/payment/history?initData=...
+ */
+router.get('/payment/history', async (req, res) => {
+    try {
+        const { initData } = req.query;
+
+        if (!initData) {
+            return res.status(400).json({ error: 'Нужен initData' });
+        }
+
+        const user = await getOrCreateUser(initData, null);
+        if (!user) {
+            return res.status(400).json({ error: 'Не удалось распарсить пользователя из initData' });
+        }
+
+        const result = await getPaymentHistory(user.telegram_user_id);
+        
+        debugLog('API PAYMENT HISTORY', {
+            userId: user.telegram_user_id,
+            paymentsCount: result.payments?.length || 0
+        });
+
+        res.json(result);
+    } catch (e) {
+        debugLog('API PAYMENT HISTORY ERROR', e.message);
+        res.status(500).json({ error: 'Ошибка получения истории платежей', details: e.message });
+    }
+});
+
+/**
+ * Получение лимитов и настроек платежей
+ * GET /api/payment/limits
+ */
+router.get('/payment/limits', (req, res) => {
+    res.json({
+        minAmount: MIN_AMOUNT,
+        maxAmount: MAX_AMOUNT,
+        supportedMethods: ['sbp', 'crypto'],
+        supportedCrypto: ['USDT', 'BTC', 'ETH']
+    });
+});
 
 module.exports = { apiRouter: router };
