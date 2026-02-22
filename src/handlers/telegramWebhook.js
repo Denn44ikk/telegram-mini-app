@@ -1,6 +1,24 @@
-const { initDb, getOrCreateUser } = require('../../db');
+const { initDb, getOrCreateUser, getUserByTelegramId, acceptTerms } = require('../../db');
 const { debugLog } = require('../utils/logger');
-const { sendText } = require('../services/telegram');
+const { sendText, sendTextWithKeyboard, answerCallbackQuery } = require('../services/telegram');
+
+const TERMS_TEXT = `📜 Пользовательское соглашение и Политика конфиденциальности
+
+Используя бота, вы соглашаетесь с условиями использования и политикой конфиденциальности сервиса. Мы обрабатываем данные только для работы сервиса и не передаём их третьим лицам в рекламных целях.
+
+Нажмите кнопку ниже, чтобы принять условия и продолжить.`;
+
+const WELCOME_TEXT = (firstName) =>
+    `👋 Привет, ${firstName || 'друг'}!\n\n` +
+    `Добро пожаловать в наш бот для генерации изображений! 🎨\n\n` +
+    `Чтобы воспользоваться всеми возможностями бота, откройте мини-приложение через кнопку ниже 👇`;
+
+const OPEN_APP_TEXT = 'Чтобы воспользоваться нашим ботом — откройте мини-приложение! 🚀';
+
+function getSupportText() {
+    const contact = process.env.SUPPORT_CONTACT || '@support';
+    return `ℹ️ Информация\n\nПо всем вопросам пишите: ${contact}`;
+}
 
 async function handleTelegramWebhook(req, res) {
     try {
@@ -19,36 +37,59 @@ async function handleTelegramWebhook(req, res) {
             updateId: update.update_id
         });
 
+        if (update.callback_query) {
+            const cb = update.callback_query;
+            const chatId = cb.message?.chat?.id;
+            const data = cb.data;
+            const userId = cb.from?.id;
+
+            if (data === 'terms_accept' && chatId && userId) {
+                await answerCallbackQuery(cb.id, 'Спасибо! Соглашение принято.');
+                const ok = await acceptTerms(String(userId));
+                if (ok) {
+                    await sendText(chatId, WELCOME_TEXT(cb.from?.first_name));
+                    await sendText(chatId, OPEN_APP_TEXT);
+                }
+            }
+            res.json({ ok: true });
+            return;
+        }
+
         if (update.message) {
             const chatId = update.message.chat.id;
-            const text = update.message.text || '';
+            const text = (update.message.text || '').trim();
             const user = update.message.from;
 
             if (text.startsWith('/start')) {
                 const startParam = text.split(' ')[1] || null;
                 debugLog('TELEGRAM /start', { chatId, userId: user.id, startParam });
 
+                let userRow = null;
                 try {
                     const fakeInitData = startParam
                         ? `user=${encodeURIComponent(JSON.stringify(user))}&start_param=${startParam}`
                         : `user=${encodeURIComponent(JSON.stringify(user))}`;
 
                     await initDb();
-                    await getOrCreateUser(fakeInitData, chatId);
+                    userRow = await getOrCreateUser(fakeInitData, chatId);
                 } catch (e) {
                     debugLog('TELEGRAM /start DB ERROR', e.message);
                 }
 
-                const welcomeText = `👋 Привет, ${user.first_name || 'друг'}!\n\n` +
-                    `Добро пожаловать в наш бот для генерации изображений! 🎨\n\n` +
-                    `Чтобы воспользоваться всеми возможностями бота, откройте мини-приложение через кнопку ниже 👇`;
-
-                await sendText(chatId, welcomeText);
-                await sendText(chatId, 'Чтобы воспользоваться нашим ботом — откройте мини-приложение! 🚀');
-            }
-            else if (text.trim()) {
+                const termsAccepted = userRow && userRow.terms_accepted_at;
+                if (!termsAccepted) {
+                    await sendTextWithKeyboard(chatId, TERMS_TEXT, [
+                        [{ text: '✅ Принять пользовательское соглашение и политику конфиденциальности', callback_data: 'terms_accept' }]
+                    ]);
+                } else {
+                    await sendText(chatId, WELCOME_TEXT(user.first_name));
+                    await sendText(chatId, OPEN_APP_TEXT);
+                }
+            } else if (text === '/info') {
+                await sendText(chatId, getSupportText());
+            } else if (text.trim()) {
                 debugLog('TELEGRAM MESSAGE', { chatId, userId: user.id, text: text.substring(0, 50) });
-                await sendText(chatId, 'Чтобы воспользоваться нашим ботом — откройте мини-приложение! 🚀');
+                await sendText(chatId, OPEN_APP_TEXT);
             }
         }
 

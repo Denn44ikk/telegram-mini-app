@@ -182,6 +182,12 @@ telegram-mini-app/
    # Админ токен (для админских endpoints)
    ADMIN_TOKEN=your-secure-admin-token
 
+   # Бот: контакт для вопросов (показывается в команде /info)
+   SUPPORT_CONTACT=@your_support_username
+
+   # Username бота без @ — для кнопки «Открыть бота» в мини-приложении при неподтверждённом соглашении
+   BOT_USERNAME=YourBotUsername
+
    # Настройки СБП (опционально)
    SBP_PHONE=+79991234567
    SBP_ACCOUNT=40817810099910004312
@@ -233,6 +239,8 @@ telegram-mini-app/
 | `DB_PASSWORD` | Пароль MySQL | Да | - |
 | `DB_NAME` | Имя базы данных | Да | - |
 | `ADMIN_TOKEN` | Токен для админских endpoints | Нет | - |
+| `SUPPORT_CONTACT` | Контакт для вопросов (в команде /info), например @support | Нет | @support |
+| `BOT_USERNAME` | Username бота без @ (для ссылки из мини-приложения) | Нет | - |
 | `SBP_PHONE` | Телефон для СБП | Нет | - |
 | `SBP_ACCOUNT` | Счет для СБП | Нет | - |
 | `CRYPTO_*_WALLET` | Адреса криптокошельков | Нет | - |
@@ -413,9 +421,13 @@ const EXCHANGE_RATE = 1;  // Курс: 1 рубль = 1 BNB
 {
   "balance": 100,
   "refCode": "NB123ABC",
-  "referredCount": 5
+  "referredCount": 5,
+  "termsAccepted": true,
+  "botLink": "https://t.me/YourBotUsername"
 }
 ```
+- `termsAccepted` — принял ли пользователь соглашение и политику конфиденциальности.
+- `botLink` — ссылка на бота (если задан `BOT_USERNAME`), для кнопки «Открыть бота» в мини-приложении.
 
 ### Платежные endpoints
 
@@ -493,7 +505,10 @@ const EXCHANGE_RATE = 1;  // Курс: 1 рубль = 1 BNB
 #### `POST /api/telegram-webhook`
 Webhook для получения обновлений от Telegram.
 
-Обрабатывает команды `/start` и обычные сообщения.
+Обрабатывает:
+- `/start` — при первом входе запрос принятия пользовательского соглашения и политики конфиденциальности (кнопка «Принять»); затем приветствие и предложение открыть мини-приложение.
+- `/info` — сообщение с контактом для вопросов (из `SUPPORT_CONTACT`).
+- Обычные сообщения — напоминание открыть мини-приложение.
 
 ### Админские endpoints
 
@@ -549,6 +564,7 @@ Webhook для получения обновлений от Telegram.
 | `balance` | INT DEFAULT 0 | Баланс в BNB |
 | `ref_code` | VARCHAR(64) UNIQUE | Реферальный код |
 | `referred_by` | VARCHAR(64) | Код реферера |
+| `terms_accepted_at` | DATETIME NULL | Дата принятия пользовательского соглашения |
 | `created_at` | TIMESTAMP | Дата создания |
 | `updated_at` | TIMESTAMP | Дата обновления |
 

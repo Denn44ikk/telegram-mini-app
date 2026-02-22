@@ -54,6 +54,7 @@ async function initDb() {
                 balance INT DEFAULT 0,
                 ref_code VARCHAR(64) UNIQUE,
                 referred_by VARCHAR(64),
+                terms_accepted_at DATETIME NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 KEY idx_users_telegram_id (telegram_user_id)
@@ -61,6 +62,10 @@ async function initDb() {
         `);
 
         dbLog('INIT', '✅ Table users created/verified');
+
+        await pool.query(`
+            ALTER TABLE users ADD COLUMN terms_accepted_at DATETIME NULL
+        `).catch(() => {});
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS referrals (
@@ -325,6 +330,20 @@ async function listUsersWithRefs() {
     }
 }
 
+async function acceptTerms(telegramUserId) {
+    try {
+        const db = await initDb();
+        const [result] = await db.execute(
+            'UPDATE users SET terms_accepted_at = NOW() WHERE telegram_user_id = ?',
+            [String(telegramUserId)]
+        );
+        return result.affectedRows > 0;
+    } catch (error) {
+        dbLog('ACCEPT_TERMS ERROR', { error: error.message });
+        throw error;
+    }
+}
+
 async function setUserBalance(telegramUserId, newBalance) {
     try {
         dbLog('SET_USER_BALANCE', { telegramUserId, newBalance });
@@ -366,6 +385,7 @@ module.exports = {
     getReferralStats,
     listUsersWithRefs,
     setUserBalance,
-    adjustUserBalance
+    adjustUserBalance,
+    acceptTerms
 };
 

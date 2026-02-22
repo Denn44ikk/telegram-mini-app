@@ -29,6 +29,59 @@ async function sendText(chatId, text) {
     }
 }
 
+/** Отправить сообщение с inline-кнопкой (reply_markup.inline_keyboard) */
+async function sendTextWithKeyboard(chatId, text, inlineKeyboard) {
+    try {
+        if (!TG_TOKEN) {
+            debugLog('SEND_TEXT_KEYBOARD ERROR', 'TELEGRAM_BOT_TOKEN not set in .env');
+            return false;
+        }
+        const response = await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+            chat_id: chatId,
+            text: text,
+            reply_markup: { inline_keyboard: inlineKeyboard }
+        });
+        debugLog('SEND_TEXT_KEYBOARD SUCCESS', { messageId: response.data?.result?.message_id });
+        return true;
+    } catch (e) {
+        debugLog('SEND_TEXT_KEYBOARD ERROR', { error: e.message, chatId });
+        return false;
+    }
+}
+
+/** Ответ на callback_query (обязательно вызвать, иначе кнопка «висит») */
+async function answerCallbackQuery(callbackQueryId, text) {
+    try {
+        if (!TG_TOKEN) return false;
+        await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/answerCallbackQuery`, {
+            callback_query_id: callbackQueryId,
+            text: text || 'Принято'
+        });
+        return true;
+    } catch (e) {
+        debugLog('ANSWER_CALLBACK ERROR', e.message);
+        return false;
+    }
+}
+
+/** Установить команды бота (меню в Telegram) */
+async function setBotCommands() {
+    try {
+        if (!TG_TOKEN) return false;
+        await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/setMyCommands`, {
+            commands: [
+                { command: 'start', description: 'Запуск бота' },
+                { command: 'info', description: 'Информация и контакты для вопросов' }
+            ]
+        });
+        debugLog('SET_BOT_COMMANDS', 'ok');
+        return true;
+    } catch (e) {
+        debugLog('SET_BOT_COMMANDS ERROR', e.message);
+        return false;
+    }
+}
+
 async function sendMediaGroupToTelegram(chatId, imageUrls, caption) {
     try {
         if (!TG_TOKEN) {
@@ -121,4 +174,4 @@ async function sendToTelegram(chatId, resource, caption, isDocument) {
     }
 }
 
-module.exports = { sendText, sendMediaGroupToTelegram, sendToTelegram };
+module.exports = { sendText, sendTextWithKeyboard, answerCallbackQuery, setBotCommands, sendMediaGroupToTelegram, sendToTelegram };

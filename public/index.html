@@ -373,6 +373,24 @@
         }
         .balance-amount { font-size: 36px; font-weight: bold; margin: 10px 0; color: #fff; }
 
+        /* Оверлей: принять соглашение в боте */
+        #terms-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: var(--bg-color);
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            text-align: center;
+        }
+        #terms-overlay.visible { display: flex; }
+        #terms-overlay h2 { margin: 0 0 16px; font-size: 22px; }
+        #terms-overlay p { color: var(--hint-color); margin: 0 0 24px; max-width: 360px; line-height: 1.5; }
+        #terms-overlay .main-btn { margin-top: 8px; }
+
         .product-result-wrap {
             display: none;
             width: 100%;
@@ -447,6 +465,39 @@
             box-shadow: 0 4px 24px rgba(236,72,153,.2);
         }
         .settings-saved { color: #22d3ee; font-size: 13px; margin-top: 10px; display: none; }
+
+        /* Выбор количества поз — в стиле приложения */
+        .poses-count-card {
+            background: rgba(255,255,255,.08);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,.12);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+        .poses-count-label {
+            display: block;
+            font-size: 14px;
+            color: var(--hint-color);
+            margin-bottom: 10px;
+        }
+        .poses-count-input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(139,92,246,.4);
+            background: rgba(0,0,0,.25);
+            color: var(--text-color);
+            font-size: 16px;
+            transition: border-color .2s, box-shadow .2s;
+        }
+        .poses-count-input:focus {
+            outline: none;
+            border-color: rgba(139,92,246,.7);
+            box-shadow: 0 0 0 2px rgba(139,92,246,.2);
+        }
 
         /* Поля ввода в стиле Kimi */
         input[type="number"] {
@@ -524,11 +575,11 @@
             <textarea id="gen-prompt" placeholder="Опишите, что нарисовать..."></textarea>
         </div>
 
-        <label id="gen-drop-zone" class="mini-upload">
+        <label id="gen-drop-zone" class="upload-area" onclick="setActivePasteTarget('gen')">
             <input type="file" id="gen-file" accept="image/*" style="display:none" onchange="previewFile('gen-file', 'gen-preview')">
-            <i class="fa-regular fa-image" style="font-size: 18px;"></i>
-            <span id="gen-file-text">Прикрепить фото или Ctrl+V</span>
-            <img id="gen-preview" class="preview-thumb">
+            <i class="fa-solid fa-cloud-arrow-up" style="font-size: 30px; margin-bottom: 10px;"></i>
+            <div id="gen-file-text">Загрузить или вставить (Ctrl+V)</div>
+            <img id="gen-preview" class="upload-preview" src="">
             <button type="button" class="upload-clear-btn" id="gen-clear" onclick="clearUpload(event, 'gen')">
                 <i class="fa-solid fa-xmark"></i>
             </button>
@@ -648,12 +699,9 @@
             <textarea id="poses-prompt" placeholder="Пожелания: стиль, эмоции, ракурс... (необязательно)"></textarea>
         </div>
 
-        <div class="input-card">
-            <label for="poses-count" style="font-size: 14px; color: var(--hint-color); display:block; margin-bottom:6px;">
-                Количество поз (1–10)
-            </label>
-            <input id="poses-count" type="number" min="1" max="10" value="4" 
-                   style="width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--hint-color); background: var(--bg-color); color: var(--text-color); font-size: 16px;">
+        <div class="poses-count-card">
+            <label for="poses-count" class="poses-count-label">Количество поз (1–10)</label>
+            <input id="poses-count" type="number" class="poses-count-input" min="1" max="10" value="4">
         </div>
 
         <div class="result-placeholder" id="poses-result-area" style="min-height: 200px;">
@@ -705,14 +753,64 @@
     </div>
 
         </div><!-- .app-wrap -->
+
+        <div id="terms-overlay">
+            <h2>📜 Соглашение</h2>
+            <p>Для использования приложения необходимо принять пользовательское соглашение и политику конфиденциальности в боте.</p>
+            <p>Откройте бота и нажмите «Старт» (/start), затем примите условия.</p>
+            <button type="button" class="main-btn" id="terms-open-bot-btn">Открыть бота</button>
+        </div>
     </div><!-- .animated-bg -->
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.ready(); tg.expand();
+        if (tg.setBackgroundColor) tg.setBackgroundColor('#0a0a1a');
 
         let pastedFiles = { gen: null, product: null, poses: null, refStyle: null, refTarget: null };
         let activePasteTarget = null;
+        let termsAccepted = true;
+        let botLink = null;
+
+        function showTermsOverlay(show) {
+            const el = document.getElementById('terms-overlay');
+            if (!el) return;
+            if (show) el.classList.add('visible'); else el.classList.remove('visible');
+        }
+        function setTermsButtonLink(link) {
+            const btn = document.getElementById('terms-open-bot-btn');
+            if (!btn) return;
+            if (link) {
+                btn.style.display = '';
+                btn.onclick = function() {
+                    if (tg.openTelegramLink) tg.openTelegramLink(link);
+                    else tg.showAlert('Откройте бота в Telegram и нажмите /start');
+                };
+            } else {
+                btn.style.display = '';
+                btn.onclick = function() { tg.showAlert('Откройте бота в Telegram и нажмите /start'); };
+            }
+        }
+
+        async function checkTermsOnLoad() {
+            try {
+                const url = '/api/balance?initData=' + encodeURIComponent(tg.initData || '');
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.error) return;
+                termsAccepted = !!data.termsAccepted;
+                botLink = data.botLink || null;
+                if (!termsAccepted) {
+                    showTermsOverlay(true);
+                    setTermsButtonLink(botLink);
+                } else {
+                    showTermsOverlay(false);
+                }
+            } catch (e) {
+                uiLog('checkTermsOnLoad:error', e.message);
+            }
+        }
+        checkTermsOnLoad();
 
         // Простой UI-логгер, чтобы видеть все шаги в консоли мини-аппа
         function uiLog(step, payload) {
@@ -789,6 +887,14 @@
                 const data = await res.json();
                 uiLog('loadBalance:response', data);
                 if (data.error) return;
+                termsAccepted = !!data.termsAccepted;
+                botLink = data.botLink || null;
+                if (!termsAccepted) {
+                    showTermsOverlay(true);
+                    setTermsButtonLink(botLink);
+                } else {
+                    showTermsOverlay(false);
+                }
                 const amountEl = document.querySelector('.balance-amount');
                 if (amountEl) amountEl.textContent = `${data.balance} BNB`;
                 const refInfo = document.getElementById('ref-info');
@@ -862,7 +968,7 @@
                 pastedFiles.gen = null;
                 document.getElementById('gen-preview').style.display = 'none';
                 document.getElementById('gen-preview').src = '';
-                document.getElementById('gen-file-text').innerText = 'Прикрепить фото или Ctrl+V';
+                document.getElementById('gen-file-text').innerText = 'Загрузить или вставить (Ctrl+V)';
                 document.getElementById('gen-clear').classList.remove('visible');
             } else if (id === 'product') {
                 document.getElementById('product-file').value = '';

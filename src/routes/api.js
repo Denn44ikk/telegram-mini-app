@@ -171,11 +171,15 @@ router.get('/balance', async (req, res) => {
         }
         const balance = await getBalance(user.telegram_user_id);
         const ref = await getReferralStats(user.telegram_user_id);
-        debugLog('API BALANCE', { userId: user.telegram_user_id, balance, refCode: ref.refCode });
+        const termsAccepted = !!user.terms_accepted_at;
+        const botUsername = process.env.BOT_USERNAME || null;
+        debugLog('API BALANCE', { userId: user.telegram_user_id, balance, refCode: ref.refCode, termsAccepted });
         res.json({
             balance,
             refCode: ref.refCode,
-            referredCount: ref.referredCount
+            referredCount: ref.referredCount,
+            termsAccepted,
+            botLink: botUsername ? `https://t.me/${botUsername.replace(/^@/, '')}` : null
         });
     } catch (e) {
         debugLog('API BALANCE ERROR', e.message);
