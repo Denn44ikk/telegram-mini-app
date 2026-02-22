@@ -18,19 +18,27 @@
             --card-bg: rgba(255,255,255,0.08);
         }
 
+        html {
+            background: var(--bg-color);
+            min-height: 100%;
+        }
+
         body {
             margin: 0; padding: 0;
+            min-height: 100%;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background: #0a0a1a;
+            background: var(--bg-color);
             color: var(--text-color);
             overflow-x: hidden;
             -webkit-tap-highlight-color: transparent;
             -webkit-font-smoothing: antialiased;
+            padding-bottom: env(safe-area-inset-bottom, 0);
         }
 
         /* === Kimi-style animated background === */
         .animated-bg {
             min-height: 100vh;
+            min-height: 100%;
             background: radial-gradient(ellipse at 20% 20%, rgba(120,50,200,.4) 0%, transparent 50%),
                 radial-gradient(ellipse at 80% 80%, rgba(50,150,200,.4) 0%, transparent 50%),
                 radial-gradient(ellipse at 50% 50%, rgba(200,50,150,.2) 0%, transparent 60%),
@@ -401,6 +409,43 @@
             color: var(--text-color);
             font-size: 16px;
         }
+        /* Кнопки выбора режима: Стандарт / Про */
+        .mode-toggle {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 4px;
+        }
+        .mode-btn {
+            padding: 14px 16px;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,.2);
+            background: rgba(255,255,255,.06);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            color: var(--hint-color);
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all .25s cubic-bezier(.4,0,.2,1);
+            box-shadow: 0 2px 20px rgba(0,0,0,.2);
+        }
+        .mode-btn:hover {
+            border-color: rgba(255,255,255,.3);
+            color: #fff;
+            background: rgba(255,255,255,.1);
+        }
+        .mode-btn.active {
+            border-color: rgba(139,92,246,.6);
+            background: linear-gradient(135deg, rgba(139,92,246,.25), rgba(99,102,241,.2));
+            color: #fff;
+            box-shadow: 0 4px 24px rgba(139,92,246,.25);
+        }
+        .mode-btn.active.pro-mode {
+            border-color: rgba(236,72,153,.5);
+            background: linear-gradient(135deg, rgba(236,72,153,.2), rgba(139,92,246,.15));
+            box-shadow: 0 4px 24px rgba(236,72,153,.2);
+        }
         .settings-saved { color: #22d3ee; font-size: 13px; margin-top: 10px; display: none; }
 
         /* Поля ввода в стиле Kimi */
@@ -631,10 +676,11 @@
             <div style="width: 24px;"></div>
         </div>
         <div class="settings-card">
-            <label for="model-select">Модель для генерации</label>
-            <select id="model-select" onchange="saveModel()">
-                <!-- заполняется через JS -->
-            </select>
+            <label>Режим генерации</label>
+            <div class="mode-toggle" role="group" aria-label="Режим">
+                <button type="button" class="mode-btn" id="mode-standard" data-model-id="google/gemini-2.5-flash-image" onclick="setMode('google/gemini-2.5-flash-image')">Стандарт</button>
+                <button type="button" class="mode-btn pro-mode" id="mode-pro" data-model-id="google/gemini-3-pro-image-preview" onclick="setMode('google/gemini-3-pro-image-preview')">Про</button>
+            </div>
             <div id="settings-saved" class="settings-saved">✓ Сохранено</div>
         </div>
     </div>
@@ -707,15 +753,20 @@
                 const res = await fetch('/api/settings');
                 const data = await res.json();
                 uiLog('loadSettings:response', data);
-                const sel = document.getElementById('model-select');
-                sel.innerHTML = data.availableModels.map(m =>
-                    `<option value="${m.id}" ${m.id === data.modelId ? 'selected' : ''}>${m.name}</option>`
-                ).join('');
+                document.querySelectorAll('.mode-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.modelId === data.modelId);
+                });
             } catch (e) { tg.showAlert('Не удалось загрузить настройки'); }
         }
 
-        async function saveModel() {
-            const modelId = document.getElementById('model-select').value;
+        function setMode(modelId) {
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.modelId === modelId);
+            });
+            saveModel(modelId);
+        }
+
+        async function saveModel(modelId) {
             try {
                 uiLog('saveModel:request', { modelId });
                 const res = await fetch('/api/settings', {
