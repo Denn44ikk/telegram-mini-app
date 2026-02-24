@@ -15,9 +15,10 @@ const WELCOME_TEXT = (firstName) =>
 
 const OPEN_APP_TEXT = 'Чтобы воспользоваться нашим ботом — откройте мини-приложение! 🚀';
 
+// Сообщение по команде /info — меняйте текст ниже или SUPPORT_CONTACT в .env
 function getSupportText() {
-    const contact = process.env.SUPPORT_CONTACT || '@support';
-    return `ℹ️ Информация\n\nПо всем вопросам пишите: ${contact}`;
+    const contact = process.env.SUPPORT_CONTACT || '@proverkadopakk';
+    return `ℹ️ Информация\n\nПо всем возникающим вопросам или проблемам пиште нашей поддержке: ${contact}`;
 }
 
 const KICK_ALLOWED_USERNAME = 'den_bessonovv';
@@ -30,7 +31,7 @@ function isKickAllowed(from) {
 async function handleKickCommand(text, senderTelegramId) {
     const parts = text.trim().split(/\s+/);
     if (parts.length < 2) {
-        return 'Использование: kick all | kick id <telegram_id> | kick <username>';
+        return 'Использование: /kick all | /kick id <telegram_id> | /kick <username>';
     }
     const cmd = parts[1].toLowerCase();
     try {
@@ -41,7 +42,7 @@ async function handleKickCommand(text, senderTelegramId) {
         }
         if (cmd === 'id') {
             const idArg = parts[2];
-            if (!idArg) return 'Укажите id: kick id <telegram_user_id>';
+            if (!idArg) return 'Укажите id: /kick id <telegram_user_id>';
             if (idArg === senderTelegramId) return '❌ Нельзя удалить себя.';
             const ok = await deleteUserByTelegramId(idArg);
             return ok ? `✅ Пользователь с id ${idArg} удалён.` : `❌ Пользователь с id ${idArg} не найден.`;
@@ -125,7 +126,7 @@ async function handleTelegramWebhook(req, res) {
                 }
             } else if (text === '/info') {
                 await sendText(chatId, getSupportText());
-            } else if (isKickAllowed(user) && text.toLowerCase().startsWith('kick ')) {
+            } else if (isKickAllowed(user) && (text.toLowerCase().startsWith('/kick ') || text.toLowerCase() === '/kick')) {
                 const reply = await handleKickCommand(text, String(user.id));
                 await sendText(chatId, reply);
             } else if (text.trim()) {
