@@ -377,6 +377,59 @@ async function adjustUserBalance(telegramUserId, delta) {
     }
 }
 
+/** Удалить пользователя по telegram_user_id (и связанные записи в referrals) */
+async function deleteUserByTelegramId(telegramUserId) {
+    try {
+        const db = await initDb();
+        const tid = String(telegramUserId);
+        await db.execute('DELETE FROM referrals WHERE referrer_user_id = ? OR referred_user_id = ?', [tid, tid]);
+        const [result] = await db.execute('DELETE FROM users WHERE telegram_user_id = ?', [tid]);
+        dbLog('DELETE_USER_BY_TELEGRAM_ID', { telegramUserId: tid, deleted: result.affectedRows > 0 });
+        return result.affectedRows > 0;
+    } catch (error) {
+        dbLog('DELETE_USER_BY_TELEGRAM_ID ERROR', { error: error.message });
+        throw error;
+    }
+}
+
+/** Удалить пользователя по username (без @) */
+async function deleteUserByUsername(username) {
+    try {
+        const db = await initDb();
+        const name = String(username).replace(/^@/, '').trim();
+        const [rows] = await db.execute('SELECT telegram_user_id FROM users WHERE username = ?', [name]);
+        const user = rows[0];
+        if (!user) {
+            dbLog('DELETE_USER_BY_USERNAME', { username: name, found: false });
+            return false;
+        }
+        return deleteUserByTelegramId(user.telegram_user_id);
+    } catch (error) {
+        dbLog('DELETE_USER_BY_USERNAME ERROR', { error: error.message });
+        throw error;
+    }
+}
+
+/** Удалить всех пользователей кроме указанного telegram_user_id */
+async function deleteAllUsersExcept(telegramUserId) {
+    try {
+        const db = await initDb();
+        const keepId = String(telegramUserId);
+        const [users] = await db.execute('SELECT telegram_user_id FROM users WHERE telegram_user_id != ?', [keepId]);
+        let deleted = 0;
+        for (const u of users) {
+            await db.execute('DELETE FROM referrals WHERE referrer_user_id = ? OR referred_user_id = ?', [u.telegram_user_id, u.telegram_user_id]);
+            const [r] = await db.execute('DELETE FROM users WHERE telegram_user_id = ?', [u.telegram_user_id]);
+            deleted += r.affectedRows;
+        }
+        dbLog('DELETE_ALL_USERS_EXCEPT', { keepId, deleted });
+        return deleted;
+    } catch (error) {
+        dbLog('DELETE_ALL_USERS_EXCEPT ERROR', { error: error.message });
+        throw error;
+    }
+}
+
 module.exports = {
     initDb,
     getOrCreateUser,
@@ -386,6 +439,9 @@ module.exports = {
     listUsersWithRefs,
     setUserBalance,
     adjustUserBalance,
-    acceptTerms
+    acceptTerms,
+    deleteUserByTelegramId,
+    deleteUserByUsername,
+    deleteAllUsersExcept
 };
 

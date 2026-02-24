@@ -35,70 +35,23 @@
             padding-bottom: env(safe-area-inset-bottom, 0);
         }
 
-        /* === Kimi-style animated background (fixed — без линии при скролле) === */
+        /* Фон без тяжёлой анимации */
         .animated-bg {
-            position: fixed;
-            inset: 0;
+            position: relative;
+            min-height: 100vh;
             width: 100%;
-            height: 100%;
-            z-index: 0;
-            overflow: auto;
-            -webkit-overflow-scrolling: touch;
-            background: radial-gradient(ellipse at 20% 20%, rgba(120,50,200,.4) 0%, transparent 50%),
-                radial-gradient(ellipse at 80% 80%, rgba(50,150,200,.4) 0%, transparent 50%),
-                radial-gradient(ellipse at 50% 50%, rgba(200,50,150,.2) 0%, transparent 60%),
-                linear-gradient(135deg, #0a0a1a, #1a0a2e, #16213e, #0f0f23, #0a0a1a);
-            background-size: 200% 200%, 200% 200%, 200% 200%, 400% 400%;
-            animation: bg-shift 20s ease infinite;
+            background: linear-gradient(135deg, #0a0a1a, #1a0a2e, #16213e, #0f0f23, #0a0a1a);
+            background-size: 200% 200%;
         }
-        @keyframes bg-shift {
-            0%, 100% { background-position: 0% 0%, 100% 100%, 50% 50%, 0% 50%; }
-            25% { background-position: 100% 0%, 0% 100%, 0% 50%, 100% 50%; }
-            50% { background-position: 100% 100%, 0% 0%, 50% 0%, 50% 100%; }
-            75% { background-position: 0% 100%, 100% 0%, 100% 50%, 50% 0%; }
+        .app-wrap {
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
+            padding-bottom: env(safe-area-inset-bottom, 0);
+            width: 100%;
+            max-width: 480px;
+            margin: 0 auto;
         }
-        .blob {
-            position: absolute;
-            border-radius: 50%;
-            filter: blur(80px);
-            opacity: .5;
-            animation: blob-float 15s ease-in-out infinite;
-            pointer-events: none;
-        }
-        .blob-1 { width: 400px; height: 400px; background: linear-gradient(135deg, #8b5cf6, #ec4899); top: -100px; left: -100px; animation-delay: 0s; }
-        .blob-2 { width: 350px; height: 350px; background: linear-gradient(135deg, #06b6d4, #3b82f6); bottom: -80px; right: -80px; animation-delay: -5s; }
-        .blob-3 { width: 300px; height: 300px; background: linear-gradient(135deg, #f59e0b, #ef4444); top: 50%; left: 50%; transform: translate(-50%,-50%); animation-delay: -10s; }
-        @keyframes blob-float {
-            0%, 100% { transform: translate(0) scale(1); }
-            25% { transform: translate(30px,-30px) scale(1.1); }
-            50% { transform: translate(-20px,20px) scale(.9); }
-            75% { transform: translate(-30px,-20px) scale(1.05); }
-        }
-        .blob-3 { transform: translate(-50%,-50%); }
-        .blob-3.blob { animation: blob-float 15s ease-in-out infinite; }
-        .particles {
-            position: absolute; width: 100%; height: 100%; overflow: hidden; top: 0; left: 0; z-index: 0; pointer-events: none;
-        }
-        .particles span {
-            position: absolute; width: 4px; height: 4px; background: rgba(255,255,255,.5); border-radius: 50%;
-            animation: particle-rise 10s linear infinite;
-        }
-        .particles span:nth-child(1){left:10%; animation-delay:0s; animation-duration:8s;}
-        .particles span:nth-child(2){left:20%; animation-delay:1s; animation-duration:12s;}
-        .particles span:nth-child(3){left:30%; animation-delay:2s; animation-duration:9s;}
-        .particles span:nth-child(4){left:40%; animation-delay:.5s; animation-duration:11s;}
-        .particles span:nth-child(5){left:50%; animation-delay:3s; animation-duration:10s;}
-        .particles span:nth-child(6){left:60%; animation-delay:1.5s; animation-duration:13s;}
-        .particles span:nth-child(7){left:70%; animation-delay:2.5s; animation-duration:8s;}
-        .particles span:nth-child(8){left:80%; animation-delay:.8s; animation-duration:12s;}
-        .particles span:nth-child(9){left:90%; animation-delay:3.5s; animation-duration:9s;}
-        @keyframes particle-rise {
-            0% { transform: translateY(100vh) scale(0); opacity: 0; }
-            10% { opacity: 1; }
-            90% { opacity: 1; }
-            100% { transform: translateY(-100vh) scale(1.5); opacity: 0; }
-        }
-        .app-wrap { position: relative; z-index: 10; min-height: 100vh; padding-bottom: env(safe-area-inset-bottom, 0); }
 
         .title-glow {
             position: relative; display: inline-block;
@@ -173,7 +126,7 @@
             border-radius: 16px;
         }
 
-        .screen { display: none; padding: 20px; min-height: 100vh; box-sizing: border-box; flex-direction: column; animation: fadeIn 0.3s ease; }
+        .screen { display: none; padding: 20px; min-height: auto; box-sizing: border-box; flex-direction: column; animation: fadeIn 0.3s ease; }
         .screen.active { display: flex; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -377,23 +330,57 @@
         }
         .balance-amount { font-size: 36px; font-weight: bold; margin: 10px 0; color: #fff; }
 
-        /* Оверлей: принять соглашение в боте */
+        /* Оверлей: соглашение в стиле приложения */
         #terms-overlay {
             display: none;
             position: fixed;
             inset: 0;
             z-index: 9999;
-            background: var(--bg-color);
+            background: rgba(0,0,0,.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             flex-direction: column;
             align-items: center;
             justify-content: center;
             padding: 24px;
-            text-align: center;
+            box-sizing: border-box;
         }
         #terms-overlay.visible { display: flex; }
-        #terms-overlay h2 { margin: 0 0 16px; font-size: 22px; }
-        #terms-overlay p { color: var(--hint-color); margin: 0 0 24px; max-width: 360px; line-height: 1.5; }
-        #terms-overlay .main-btn { margin-top: 8px; }
+        #terms-overlay .terms-modal {
+            width: 100%;
+            max-width: 400px;
+            background: rgba(255,255,255,.08);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,.12);
+            border-radius: 16px;
+            padding: 24px;
+            text-align: left;
+            box-shadow: 0 8px 40px rgba(0,0,0,.4), 0 0 25px rgba(139,92,246,.15);
+        }
+        #terms-overlay h2 { margin: 0 0 12px; font-size: 22px; color: #fff; text-align: center; }
+        #terms-overlay .terms-text { color: var(--hint-color); font-size: 14px; line-height: 1.5; margin-bottom: 20px; }
+        #terms-overlay .terms-links { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+        #terms-overlay .terms-links a { color: var(--button-color); text-decoration: none; }
+        #terms-overlay .terms-links a:hover { text-decoration: underline; }
+        #terms-overlay .terms-checkbox-wrap {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 14px;
+            cursor: pointer;
+            color: var(--text-color);
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        #terms-overlay .terms-checkbox-wrap input[type="checkbox"] {
+            width: 20px; height: 20px;
+            margin: 0; flex-shrink: 0;
+            accent-color: var(--button-color);
+            cursor: pointer;
+        }
+        #terms-overlay .main-btn { width: 100%; margin-top: 8px; }
+        #terms-overlay .main-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .product-result-wrap {
             display: none;
@@ -541,13 +528,6 @@
 </head>
 <body>
     <div class="animated-bg">
-        <div class="blob blob-1"></div>
-        <div class="blob blob-2"></div>
-        <div class="blob blob-3"></div>
-        <div class="particles">
-            <span></span><span></span><span></span><span></span><span></span>
-            <span></span><span></span><span></span>
-        </div>
         <div class="app-wrap">
     <!-- 1. МЕНЮ -->
     <div id="menu-screen" class="screen active">
@@ -779,14 +759,23 @@
         </div><!-- .app-wrap -->
 
         <div id="terms-overlay">
-            <h2>📜 Соглашение</h2>
-            <p>Для использования приложения необходимо принять пользовательское соглашение и политику конфиденциальности в боте.</p>
-            <div class="agreements-links" style="margin: 16px 0;">
-                <a href="https://telegra.ph/Politika-konfidencialnosti-08-15-17" target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a>
-                <a href="https://telegra.ph/Polzovatelskoe-soglashenie-08-15-10" target="_blank" rel="noopener noreferrer">Пользовательское соглашение</a>
+            <div class="terms-modal">
+                <h2>📜 Соглашение</h2>
+                <p class="terms-text">Для использования приложения необходимо ознакомиться с документами и принять условия.</p>
+                <div class="terms-links">
+                    <a href="https://telegra.ph/Politika-konfidencialnosti-08-15-17" target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a>
+                    <a href="https://telegra.ph/Polzovatelskoe-soglashenie-08-15-10" target="_blank" rel="noopener noreferrer">Пользовательское соглашение</a>
+                </div>
+                <label class="terms-checkbox-wrap">
+                    <input type="checkbox" id="terms-check-privacy" autocomplete="off">
+                    <span>Я ознакомился(ась) с Политикой конфиденциальности</span>
+                </label>
+                <label class="terms-checkbox-wrap">
+                    <input type="checkbox" id="terms-check-agreement" autocomplete="off">
+                    <span>Я принимаю Пользовательское соглашение</span>
+                </label>
+                <button type="button" class="main-btn purple-glow" id="terms-accept-btn" disabled>Принять</button>
             </div>
-            <p>Откройте бота и нажмите «Старт» (/start), затем примите условия.</p>
-            <button type="button" class="main-btn" id="terms-open-bot-btn">Открыть бота</button>
         </div>
     </div><!-- .animated-bg -->
 
@@ -803,20 +792,42 @@
         function showTermsOverlay(show) {
             const el = document.getElementById('terms-overlay');
             if (!el) return;
-            if (show) el.classList.add('visible'); else el.classList.remove('visible');
-        }
-        function setTermsButtonLink(link) {
-            const btn = document.getElementById('terms-open-bot-btn');
-            if (!btn) return;
-            if (link) {
-                btn.style.display = '';
-                btn.onclick = function() {
-                    if (tg.openTelegramLink) tg.openTelegramLink(link);
-                    else tg.showAlert('Откройте бота в Telegram и нажмите /start');
-                };
+            if (show) {
+                el.classList.add('visible');
+                document.getElementById('terms-check-privacy').checked = false;
+                document.getElementById('terms-check-agreement').checked = false;
+                document.getElementById('terms-accept-btn').disabled = true;
             } else {
-                btn.style.display = '';
-                btn.onclick = function() { tg.showAlert('Откройте бота в Telegram и нажмите /start'); };
+                el.classList.remove('visible');
+            }
+        }
+        function updateTermsAcceptButton() {
+            const btn = document.getElementById('terms-accept-btn');
+            const c1 = document.getElementById('terms-check-privacy');
+            const c2 = document.getElementById('terms-check-agreement');
+            if (btn && c1 && c2) btn.disabled = !(c1.checked && c2.checked);
+        }
+        async function acceptTermsInApp() {
+            const btn = document.getElementById('terms-accept-btn');
+            if (!btn || btn.disabled) return;
+            btn.disabled = true;
+            try {
+                const res = await fetch('/api/accept-terms', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initData: tg.initData || '' })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    termsAccepted = true;
+                    showTermsOverlay(false);
+                } else {
+                    tg.showAlert(data.error || 'Не удалось принять соглашение');
+                    updateTermsAcceptButton();
+                }
+            } catch (e) {
+                tg.showAlert('Ошибка сети');
+                updateTermsAcceptButton();
             }
         }
 
@@ -830,7 +841,6 @@
                 botLink = data.botLink || null;
                 if (!termsAccepted) {
                     showTermsOverlay(true);
-                    setTermsButtonLink(botLink);
                 } else {
                     showTermsOverlay(false);
                 }
@@ -839,6 +849,15 @@
             }
         }
         checkTermsOnLoad();
+
+        (function initTermsCheckboxes() {
+            const c1 = document.getElementById('terms-check-privacy');
+            const c2 = document.getElementById('terms-check-agreement');
+            const acceptBtn = document.getElementById('terms-accept-btn');
+            if (c1) c1.addEventListener('change', updateTermsAcceptButton);
+            if (c2) c2.addEventListener('change', updateTermsAcceptButton);
+            if (acceptBtn) acceptBtn.addEventListener('click', acceptTermsInApp);
+        })();
 
         // Простой UI-логгер, чтобы видеть все шаги в консоли мини-аппа
         function uiLog(step, payload) {
@@ -919,7 +938,6 @@
                 botLink = data.botLink || null;
                 if (!termsAccepted) {
                     showTermsOverlay(true);
-                    setTermsButtonLink(botLink);
                 } else {
                     showTermsOverlay(false);
                 }

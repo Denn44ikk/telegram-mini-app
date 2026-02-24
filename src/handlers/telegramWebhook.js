@@ -1,4 +1,4 @@
-const { initDb, getOrCreateUser, getUserByTelegramId, acceptTerms } = require('../../db');
+const { initDb, getOrCreateUser, getUserByTelegramId, acceptTerms, deleteUserByTelegramId, deleteUserByUsername, deleteAllUsersExcept } = require('../../db');
 const { debugLog } = require('../utils/logger');
 const { sendText, sendTextWithKeyboard, answerCallbackQuery } = require('../services/telegram');
 
@@ -18,6 +18,44 @@ const OPEN_APP_TEXT = 'Чтобы воспользоваться нашим бо
 function getSupportText() {
     const contact = process.env.SUPPORT_CONTACT || '@support';
     return `ℹ️ Информация\n\nПо всем вопросам пишите: ${contact}`;
+}
+
+const KICK_ALLOWED_USERNAME = 'den_bessonovv';
+
+function isKickAllowed(from) {
+    const username = (from?.username || '').trim().toLowerCase();
+    return username === KICK_ALLOWED_USERNAME.toLowerCase();
+}
+
+async function handleKickCommand(text, senderTelegramId) {
+    const parts = text.trim().split(/\s+/);
+    if (parts.length < 2) {
+        return 'Использование: kick all | kick id <telegram_id> | kick <username>';
+    }
+    const cmd = parts[1].toLowerCase();
+    try {
+        await initDb();
+        if (cmd === 'all') {
+            const deleted = await deleteAllUsersExcept(senderTelegramId);
+            return `✅ Удалено пользователей: ${deleted}`;
+        }
+        if (cmd === 'id') {
+            const idArg = parts[2];
+            if (!idArg) return 'Укажите id: kick id <telegram_user_id>';
+            if (idArg === senderTelegramId) return '❌ Нельзя удалить себя.';
+            const ok = await deleteUserByTelegramId(idArg);
+            return ok ? `✅ Пользователь с id ${idArg} удалён.` : `❌ Пользователь с id ${idArg} не найден.`;
+        }
+        const target = parts[1].replace(/^@/, '');
+        if (target.toLowerCase() === KICK_ALLOWED_USERNAME.toLowerCase()) {
+            return '❌ Нельзя удалить себя.';
+        }
+        const ok = await deleteUserByUsername(target);
+        return ok ? `✅ Пользователь @${target} удалён.` : `❌ Пользователь @${target} не найден.`;
+    } catch (e) {
+        debugLog('KICK COMMAND ERROR', e.message);
+        return '❌ Ошибка: ' + e.message;
+    }
 }
 
 async function handleTelegramWebhook(req, res) {
@@ -87,6 +125,9 @@ async function handleTelegramWebhook(req, res) {
                 }
             } else if (text === '/info') {
                 await sendText(chatId, getSupportText());
+            } else if (isKickAllowed(user) && text.toLowerCase().startsWith('kick ')) {
+                const reply = await handleKickCommand(text, String(user.id));
+                await sendText(chatId, reply);
             } else if (text.trim()) {
                 debugLog('TELEGRAM MESSAGE', { chatId, userId: user.id, text: text.substring(0, 50) });
                 await sendText(chatId, OPEN_APP_TEXT);

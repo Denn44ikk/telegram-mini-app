@@ -1,7 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const { getModelId, setModelId, getAvailableModels } = require('../../prompts');
-const { initDb, getOrCreateUser, getBalance, getReferralStats, listUsersWithRefs, setUserBalance } = require('../../db');
+const { initDb, getOrCreateUser, getBalance, getReferralStats, listUsersWithRefs, setUserBalance, acceptTerms } = require('../../db');
 const { debugLog } = require('../utils/logger');
 const { adminGuard } = require('../middleware/adminGuard');
 const { telegramWebhookGuard } = require('../middleware/telegramWebhookGuard');
@@ -157,6 +157,27 @@ router.post('/poses-gen-image', upload.single('image'), async (req, res) => {
     } catch (e) {
         debugLog('POSES-UPLOAD ERROR', e.message);
         res.status(500).json({ error: 'Ошибка загрузки', details: e.message });
+    }
+});
+
+router.post('/accept-terms', async (req, res) => {
+    try {
+        const initData = req.body?.initData;
+        if (!initData) {
+            return res.status(400).json({ error: 'Нужен initData' });
+        }
+        const user = await getOrCreateUser(initData, null);
+        if (!user) {
+            return res.status(400).json({ error: 'Не удалось распарсить пользователя из initData' });
+        }
+        const ok = await acceptTerms(user.telegram_user_id);
+        if (!ok) {
+            return res.status(400).json({ error: 'Не удалось обновить соглашение' });
+        }
+        res.json({ success: true });
+    } catch (e) {
+        debugLog('API ACCEPT-TERMS ERROR', e.message);
+        res.status(500).json({ error: 'Ошибка принятия соглашения', details: e.message });
     }
 });
 
