@@ -64,7 +64,7 @@ async function answerCallbackQuery(callbackQueryId, text) {
     }
 }
 
-/** Установить команды бота (меню в Telegram) */
+/** Установить команды бота (меню справа от поля ввода). Вызывается при старте сервера — после изменений перезапустите сервер. */
 async function setBotCommands() {
     try {
         if (!TG_TOKEN) return false;
