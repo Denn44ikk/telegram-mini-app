@@ -455,6 +455,22 @@
             transition: all .25s cubic-bezier(.4,0,.2,1);
             box-shadow: 0 2px 20px rgba(0,0,0,.2);
         }
+        .mode-btn-content {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+        }
+        .mode-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: inherit;
+        }
+        .mode-price {
+            font-size: 12px;
+            font-weight: 400;
+            color: var(--hint-color);
+        }
         .mode-btn:hover {
             border-color: rgba(255,255,255,.3);
             color: #fff;
@@ -518,11 +534,88 @@
             font-size: 16px;
         }
 
+        /* Ошибки — красивый тост внизу экрана */
+        .error-toast {
+            position: fixed;
+            left: 50%;
+            bottom: 18px;
+            transform: translate(-50%, 120%);
+            width: calc(100% - 32px);
+            max-width: 460px;
+            box-sizing: border-box;
+            padding: 14px 16px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            background: radial-gradient(circle at top left, rgba(248,113,113,.28), rgba(15,23,42,.95));
+            border-radius: 16px;
+            border: 1px solid rgba(248,113,113,.6);
+            box-shadow: 0 18px 60px rgba(0,0,0,.7);
+            color: #fee2e2;
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .25s ease, transform .25s ease;
+            z-index: 9998;
+        }
+        .error-toast.visible {
+            opacity: 1;
+            transform: translate(-50%, 0);
+            pointer-events: auto;
+        }
+        .error-toast-icon {
+            width: 26px;
+            height: 26px;
+            border-radius: 999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(248,113,113,.25);
+            color: #fecaca;
+            flex-shrink: 0;
+            box-shadow: 0 0 16px rgba(248,113,113,.45);
+        }
+        .error-toast-body {
+            flex: 1;
+            min-width: 0;
+        }
+        .error-toast-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 2px;
+            color: #fee2e2;
+        }
+        .error-toast-message {
+            font-size: 13px;
+            color: #fecaca;
+            line-height: 1.4;
+            word-wrap: break-word;
+            word-break: break-word;
+        }
+        .error-toast-close {
+            border: none;
+            background: transparent;
+            color: #fecaca;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 2px 0 0 8px;
+            flex-shrink: 0;
+            opacity: 0.8;
+        }
+        .error-toast-close:hover {
+            opacity: 1;
+        }
+
         @media (max-width: 480px) {
             .blob { filter: blur(60px); }
             .blob-1 { width: 250px; height: 250px; }
             .blob-2 { width: 200px; height: 200px; }
             .blob-3 { width: 180px; height: 180px; }
+            .error-toast {
+                bottom: 14px;
+                width: calc(100% - 24px);
+            }
         }
     </style>
 </head>
@@ -726,8 +819,18 @@
         <div class="settings-card">
             <label>Режим генерации</label>
             <div class="mode-toggle" role="group" aria-label="Режим">
-                <button type="button" class="mode-btn" id="mode-standard" data-model-id="google/gemini-2.5-flash-image" onclick="setMode('google/gemini-2.5-flash-image')">Стандарт</button>
-                <button type="button" class="mode-btn pro-mode" id="mode-pro" data-model-id="google/gemini-3-pro-image-preview" onclick="setMode('google/gemini-3-pro-image-preview')">Про</button>
+                <button type="button" class="mode-btn" id="mode-standard" data-model-id="google/gemini-2.5-flash-image" onclick="setMode('google/gemini-2.5-flash-image')">
+                    <span class="mode-btn-content">
+                        <span class="mode-title">Стандарт</span>
+                        <span class="mode-price" id="mode-standard-price"></span>
+                    </span>
+                </button>
+                <button type="button" class="mode-btn pro-mode" id="mode-pro" data-model-id="google/gemini-3-pro-image-preview" onclick="setMode('google/gemini-3-pro-image-preview')">
+                    <span class="mode-btn-content">
+                        <span class="mode-title">Про</span>
+                        <span class="mode-price" id="mode-pro-price"></span>
+                    </span>
+                </button>
             </div>
             <div id="settings-saved" class="settings-saved">✓ Сохранено</div>
         </div>
@@ -756,7 +859,7 @@
             Реферальная программа скоро будет доступна.
         </div>
         <div style="text-align: center; color: var(--hint-color); margin-top: 20px;">История пуста</div>
-        <button class="main-btn" onclick="tg.showAlert('Скоро!')">Пополнить</button>
+        <button class="main-btn" onclick="showErrorToast('Функция пополнения скоро будет доступна.')">Пополнить</button>
     </div>
 
         </div><!-- .app-wrap -->
@@ -780,12 +883,66 @@
                 <button type="button" class="main-btn purple-glow" id="terms-accept-btn" disabled>Принять</button>
             </div>
         </div>
+        <div id="error-toast" class="error-toast">
+            <div class="error-toast-icon">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <div class="error-toast-body">
+                <div class="error-toast-title">Ошибка</div>
+                <div id="error-toast-message" class="error-toast-message"></div>
+            </div>
+            <button type="button" class="error-toast-close" onclick="hideErrorToast()">
+                &times;
+            </button>
+        </div>
     </div><!-- .animated-bg -->
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.ready(); tg.expand();
         if (tg.setBackgroundColor) tg.setBackgroundColor('#0a0a1a');
+
+        const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+
+        function showErrorToast(message) {
+            uiLog('uiError', { message });
+            const toast = document.getElementById('error-toast');
+            const msgEl = document.getElementById('error-toast-message');
+            if (!toast || !msgEl) {
+                // fallback на стандартное окно Telegram
+                if (tg && tg.showAlert) tg.showAlert(message);
+                return;
+            }
+            msgEl.textContent = message || 'Произошла ошибка';
+            toast.classList.add('visible');
+            if (window.__errorToastTimer) clearTimeout(window.__errorToastTimer);
+            window.__errorToastTimer = setTimeout(() => {
+                toast.classList.remove('visible');
+            }, 5000);
+        }
+
+        function hideErrorToast() {
+            const toast = document.getElementById('error-toast');
+            if (toast) toast.classList.remove('visible');
+            if (window.__errorToastTimer) {
+                clearTimeout(window.__errorToastTimer);
+                window.__errorToastTimer = null;
+            }
+        }
+
+        function isAllowedImageType(file) {
+            if (!file) return false;
+            const mime = file.type || '';
+            if (!mime || !mime.startsWith('image/')) {
+                showErrorToast('Можно загрузить только изображения (JPG, PNG или WebP).');
+                return false;
+            }
+            if (!ALLOWED_IMAGE_TYPES.includes(mime)) {
+                showErrorToast('Этот формат изображения пока не поддерживается. Попробуйте JPG, PNG или WebP.');
+                return false;
+            }
+            return true;
+        }
 
         let pastedFiles = { gen: null, product: null, poses: null, refStyle: null, refTarget: null };
         let activePasteTarget = null;
@@ -825,11 +982,11 @@
                     termsAccepted = true;
                     showTermsOverlay(false);
                 } else {
-                    tg.showAlert(data.error || 'Не удалось принять соглашение');
+                    showErrorToast(data.error || 'Не удалось принять соглашение');
                     updateTermsAcceptButton();
                 }
             } catch (e) {
-                tg.showAlert('Ошибка сети');
+                showErrorToast('Ошибка сети');
                 updateTermsAcceptButton();
             }
         }
@@ -901,10 +1058,25 @@
                 const res = await fetch('/api/settings');
                 const data = await res.json();
                 uiLog('loadSettings:response', data);
+
+                const prices = {};
+                if (Array.isArray(data.availableModels)) {
+                    data.availableModels.forEach(m => {
+                        if (m && m.id && typeof m.pricePerImage === 'number') {
+                            prices[m.id] = m.pricePerImage;
+                        }
+                    });
+                }
+
                 document.querySelectorAll('.mode-btn').forEach(btn => {
-                    btn.classList.toggle('active', btn.dataset.modelId === data.modelId);
+                    const modelId = btn.dataset.modelId;
+                    btn.classList.toggle('active', modelId === data.modelId);
+                    const priceEl = btn.querySelector('.mode-price');
+                    if (priceEl && modelId && prices[modelId] != null) {
+                        priceEl.textContent = `${prices[modelId]} монет/фото`;
+                    }
                 });
-            } catch (e) { tg.showAlert('Не удалось загрузить настройки'); }
+            } catch (e) { showErrorToast('Не удалось загрузить настройки'); }
         }
 
         function setMode(modelId) {
@@ -925,8 +1097,10 @@
                 if (data.success) {
                     document.getElementById('settings-saved').style.display = 'block';
                     setTimeout(() => document.getElementById('settings-saved').style.display = 'none', 2000);
+                } else if (data.error) {
+                    showErrorToast(data.error);
                 }
-            } catch (e) { tg.showAlert('Не удалось сохранить'); }
+            } catch (e) { showErrorToast('Не удалось сохранить настройки'); }
         }
 
         async function loadBalance() {
@@ -1052,6 +1226,10 @@
 
         function handlePastedImage(file, type) {
             uiLog('handlePastedImage', { type, size: file.size, mime: file.type });
+            if (!isAllowedImageType(file)) {
+                uiLog('handlePastedImage:unsupportedType', { type: file.type });
+                return;
+            }
             pastedFiles[type] = file;
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -1095,6 +1273,11 @@
             const file = document.getElementById(inputId).files[0];
             if (file) {
                 uiLog('previewFile', { inputId, imgId, size: file.size, mime: file.type });
+                if (!isAllowedImageType(file)) {
+                    uiLog('previewFile:unsupportedType', { mime: file.type });
+                    document.getElementById(inputId).value = '';
+                    return;
+                }
                 if(inputId === 'gen-file') pastedFiles.gen = null;
                 if(inputId === 'product-file') pastedFiles.product = null;
                 if(inputId === 'poses-file') pastedFiles.poses = null;
@@ -1150,7 +1333,7 @@
                     hasFile: !!fileToSend
                 });
                 if (!prompt) {
-                    tg.showAlert('Введите текст!');
+                    showErrorToast('Введите текст промта.');
                     uiLog('runGeneration:text:abort', { reason: 'no prompt' });
                     return;
                 }
@@ -1176,11 +1359,13 @@
 
                 if (!fileToSend) {
                     uiLog('runGeneration:product:abort', { reason: 'no file' });
-                    return tg.showAlert('Нужно фото продукта!');
+                    showErrorToast('Нужно загрузить фото продукта.');
+                    return;
                 }
                 if (!prompt) {
                     uiLog('runGeneration:product:abort', { reason: 'no prompt' });
-                    return tg.showAlert('Опишите фон!');
+                    showErrorToast('Опишите фон и окружение для продукта.');
+                    return;
                 }
 
                 bodyData = { formData: true, prompt, initData: tg.initData, file: fileToSend };
@@ -1204,11 +1389,13 @@
 
                 if (!refFile) {
                     uiLog('runGeneration:ref:abort', { reason: 'no refFile' });
-                    return tg.showAlert('Нужно хотя бы фото референса.');
+                    showErrorToast('Нужно хотя бы одно фото‑референс.');
+                    return;
                 }
                 if (!prompt) {
                     uiLog('runGeneration:ref:abort', { reason: 'no prompt' });
-                    return tg.showAlert('Опишите, что вы хотите получить.');
+                    showErrorToast('Опишите, что вы хотите получить по референсу.');
+                    return;
                 }
 
                 const refBase64 = await toBase64(refFile);
@@ -1246,7 +1433,8 @@
 
                 if (!fileToSend) {
                     uiLog('runGeneration:poses:abort', { reason: 'no file' });
-                    return tg.showAlert('Нужно фото человека!');
+                    showErrorToast('Нужно загрузить фото человека.');
+                    return;
                 }
 
                 bodyData = { formData: true, prompt, initData: tg.initData, file: fileToSend, count };
@@ -1344,10 +1532,10 @@
                 } else {
                     const msg = data.error || 'Ошибка';
                     if (res.status === 402 && (data.shortfall != null || data.required != null)) {
-                        tg.showAlert(msg);
+                        showErrorToast(msg);
                         loadBalance();
                     } else {
-                        tg.showAlert(msg);
+                        showErrorToast(msg);
                     }
                     uiLog('runGeneration:noResult', { type, data });
                     tg.HapticFeedback.notificationOccurred('error');
@@ -1355,9 +1543,9 @@
             } catch (e) {
                 clearTimeout(timeoutId);
                 if (e.name === 'AbortError') {
-                    tg.showAlert('Сервер не успел ответить. Генерация заняла слишком много времени — попробуйте снова.');
+                    showErrorToast('Сервер не успел ответить. Генерация заняла слишком много времени — попробуйте снова.');
                 } else {
-                    tg.showAlert('Ошибка сети или сервер не отвечает. Проверьте интернет и попробуйте снова.');
+                    showErrorToast('Ошибка сети или сервер не отвечает. Проверьте интернет и попробуйте снова.');
                 }
                 uiLog('runGeneration:fetchError', { type, name: e.name, message: e.message });
                 tg.HapticFeedback.notificationOccurred('error');

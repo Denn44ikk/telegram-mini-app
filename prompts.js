@@ -1,11 +1,12 @@
 // prompts.js
 const fs = require('fs');
 const path = require('path');
+const botConfig = require('./botConfig.json');
 
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 
 /** Доступные модели для генерации изображений (OpenRouter) */
-const AVAILABLE_MODELS = [
+const AVAILABLE_MODELS = botConfig.models || [
     { id: 'google/gemini-3-pro-image-preview', name: 'Nano Banana Pro' },
     { id: 'google/gemini-2.5-flash-image', name: 'Nano Banana' },
 ];
@@ -24,7 +25,11 @@ function saveConfig(config) {
 }
 
 function getModelId() {
-    return loadConfig().modelId || 'google/gemini-2.5-flash-image';
+    const stored = loadConfig().modelId;
+    if (stored) return stored;
+    const defaultFromConfig = (botConfig.models || []).find(m => m.default)?.id;
+    if (defaultFromConfig) return defaultFromConfig;
+    return 'google/gemini-2.5-flash-image';
 }
 
 function setModelId(modelId) {
@@ -41,32 +46,43 @@ function getAvailableModels() {
  * СИСТЕМНЫЙ ПРОМПТ
  * Объясняем AI, что он только генерирует картинки, без болтовни.
  */
-const SYSTEM_PROMPT = `
+const SYSTEM_PROMPT = botConfig.systemPrompt || `
 You are a strict Image Generation API. 
 You are NOT a chat assistant. You DO NOT converse.
 If you cannot generate an image, output "ERROR: Cannot generate".
 `;
 
-// ========== ПРОМПТЫ (удобно редактировать) ==========
-// Используются в «Фото по промту» (генерация по тексту и опционально по референсу).
+// ========== ПРОМПТЫ И РЕЖИМЫ (читаются из botConfig.json) ==========
+const MODES = botConfig.modes || {};
 
+// Используются в «Фото по промту» (генерация по тексту и опционально по референсу).
 /** Только текст — пользователь описал, что нарисовать. %s = userPrompt */
-const PROMPT_GEN_TEXT = 'Generate an ultra high‑resolution, hyper‑realistic photograph of: "%s". Use natural lighting, realistic skin with visible small pores and subtle wrinkles, individual hair strands, detailed eyes, and fabric with fine texture and tiny imperfections. Do NOT over-smooth the image. Return ONLY the image.';
+const PROMPT_GEN_TEXT =
+    (MODES.gen && MODES.gen.promptTextOnly) ||
+    'Generate an ultra high‑resolution, hyper‑realistic photograph of: "%s". Use natural lighting, realistic skin with visible small pores and subtle wrinkles, individual hair strands, detailed eyes, and fabric with fine texture and tiny imperfections. Do NOT over-smooth the image. Return ONLY the image.';
 
 /** Текст + референс — пользователь прикрепил одно фото и дал инструкции. %s = userPrompt */
-const PROMPT_GEN_WITH_IMAGE = 'Analyze this reference image and generate a NEW ultra high‑resolution, hyper‑realistic photograph based on these instructions: "%s". Preserve natural skin with small pores and light wrinkles, realistic facial features, detailed hair, and clothing with small imperfections (folds, threads). Do NOT over-smooth the image. Return ONLY the image.';
+const PROMPT_GEN_WITH_IMAGE =
+    (MODES.gen && MODES.gen.promptWithImage) ||
+    'Analyze this reference image and generate a NEW ultra high‑resolution, hyper‑realistic photograph based on these instructions: "%s". Preserve natural skin with small pores and light wrinkles, realistic facial features, detailed hair, and clothing with small imperfections (folds, threads). Do NOT over-smooth the image. Return ONLY the image.';
 
 // ========== ПРОМПТЫ ФОТОСЕССИИ / ПОЗ / ДВА РЕФЕРЕНСА ==========
 // Используются в «Фотосессия с продуктом», «Случайные позы» и «Фото по референсу (2 фото)».
 
 /** Фотосессия: продукт + описание окружения/фона. %s = userPrompt */
-const PROMPT_PRODUCT = 'Place this product photo into a professional, hyper‑realistic product photography scene. Environment and style: "%s". Keep the product clearly visible and well-lit, with sharp details, realistic reflections and shadows, visible surface texture and tiny imperfections (micro-scratches, fingerprints, fabric fibers). Do NOT over-smooth or cartoonize. Return ONLY the image.';
+const PROMPT_PRODUCT =
+    (MODES.product && MODES.product.prompt) ||
+    'Place this product photo into a professional, hyper‑realistic product photography scene. Environment and style: "%s". Keep the product clearly visible and well-lit, with sharp details, realistic reflections and shadows, visible surface texture and tiny imperfections (micro-scratches, fingerprints, fabric fibers). Do NOT over-smooth or cartoonize. Return ONLY the image.';
 
 /** Случайные позы: одно фото человека + пожелания. %s = userPrompt (включая количество поз и стили). */
-const PROMPT_POSES = 'Using this person photo as identity reference, generate a NEW pose according to these wishes: "%s". Keep the same person, facial features, skin tone, clothing style and overall look. Make the result an ultra high‑resolution, hyper‑realistic photograph with natural lighting, subtle skin wrinkles and pores, realistic hair strands and fabric folds with small imperfections. Do NOT over-smooth or stylize like illustration. Return ONLY the image.';
+const PROMPT_POSES =
+    (MODES.poses && MODES.poses.prompt) ||
+    'Using this person photo as identity reference, generate a NEW pose according to these wishes: "%s". Keep the same person, facial features, skin tone, clothing style and overall look. Make the result an ultra high‑resolution, hyper‑realistic photograph with natural lighting, subtle skin wrinkles and pores, realistic hair strands and fabric folds with small imperfections. Do NOT over-smooth or stylize like illustration. Return ONLY the image.';
 
 /** Два фото: первое — референс (стиль/ракурс), второе — основное (человек/объект). %s = userPrompt */
-const PROMPT_REF_PAIR = 'You are given TWO images. The FIRST image is a style, composition and pose reference. The SECOND image contains the main subject (person or object) whose identity must be preserved. Following these instructions: "%s", transform the SECOND image so that it matches the camera angle, pose, lighting, color palette and overall mood of the FIRST image, while strictly preserving the face, body proportions and recognizable details of the subject from the SECOND image. The final result must look like an ultra high‑resolution, hyper‑realistic photograph with natural skin (small pores, light wrinkles), realistic hair and detailed clothing with tiny imperfections (folds, seams, threads). Do NOT over-smooth, do NOT make plastic or cartoon faces. Return ONLY the final image.';
+const PROMPT_REF_PAIR =
+    (MODES.ref && MODES.ref.prompt) ||
+    'You are given TWO images. The FIRST image is a style, composition and pose reference. The SECOND image contains the main subject (person or object) whose identity must be preserved. Following these instructions: "%s", transform the SECOND image so that it matches the camera angle, pose, lighting, color palette and overall mood of the FIRST image, while strictly preserving the face, body proportions and recognizable details of the subject from the SECOND image. The final result must look like an ultra high‑resolution, hyper‑realistic photograph with natural skin (small pores, light wrinkles), realistic hair and detailed clothing with tiny imperfections (folds, seams, threads). Do NOT over-smooth, do NOT make plastic or cartoon faces. Return ONLY the final image.';
 
 /**
  * Подставляет userPrompt в шаблон (поддержка одной подстановки %s).

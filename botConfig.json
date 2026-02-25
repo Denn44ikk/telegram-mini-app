@@ -1,0 +1,41 @@
+{
+  "systemPrompt": "You are a strict Image Generation API. You are NOT a chat assistant. You DO NOT converse. If you cannot generate an image, output \"ERROR: Cannot generate\".",
+  "models": [
+    {
+      "id": "google/gemini-2.5-flash-image",
+      "name": "Nano Banana",
+      "pricePerImage": 15,
+      "default": true
+    },
+    {
+      "id": "google/gemini-3-pro-image-preview",
+      "name": "Nano Banana Pro",
+      "pricePerImage": 30,
+      "default": false
+    }
+  ],
+  "modes": {
+    "gen": {
+      "id": "gen",
+      "displayName": "Фото по промту",
+      "promptTextOnly": "Generate an ultra high\u2011resolution, hyper\u2011realistic photograph of: \"%s\". Use natural lighting, realistic skin with visible small pores and subtle wrinkles, individual hair strands, detailed eyes, and fabric with fine texture and tiny imperfections. Do NOT over-smooth the image. Return ONLY the image.",
+      "promptWithImage": "Analyze this reference image and generate a NEW ultra high\u2011resolution, hyper\u2011realistic photograph based on these instructions: \"%s\". Preserve natural skin with small pores and light wrinkles, realistic facial features, detailed hair, and clothing with small imperfections (folds, threads). Do NOT over-smooth the image. Return ONLY the image."
+    },
+    "product": {
+      "id": "product",
+      "displayName": "Фотосессия с продуктом",
+      "prompt": "Place this product photo into a professional, hyper\u2011realistic product photography scene. Environment and style: \"%s\". Keep the product clearly visible and well-lit, with sharp details, realistic reflections and shadows, visible surface texture and tiny imperfections (micro-scratches, fingerprints, fabric fibers). Do NOT over-smooth or cartoonize. Return ONLY the image."
+    },
+    "poses": {
+      "id": "poses",
+      "displayName": "Случайные позы",
+      "prompt": "Using this person photo as identity reference, generate a NEW pose according to these wishes: \"%s\". Keep the same person, facial features, skin tone, clothing style and overall look. Make the result an ultra high\u2011resolution, hyper\u2011realistic photograph with natural lighting, subtle skin wrinkles and pores, realistic hair strands and fabric folds with small imperfections. Do NOT over-smooth or stylize like illustration. Return ONLY the image."
+    },
+    "ref": {
+      "id": "ref",
+      "displayName": "Фото по референсу (2 фото)",
+      "prompt": "You are given TWO images. The FIRST image is a style, composition and pose reference. The SECOND image contains the main subject (person or object) whose identity must be preserved. Following these instructions: \"%s\", transform the SECOND image so that it matches the camera angle, pose, lighting, color palette and overall mood of the FIRST image, while strictly preserving the face, body proportions and recognizable details of the subject from the SECOND image. The final result must look like an ultra high\u2011resolution, hyper\u2011realistic photograph with natural skin (small pores, light wrinkles), realistic hair and detailed clothing with tiny imperfections (folds, seams, threads). Do NOT over-smooth, do NOT make plastic or cartoon faces. Return ONLY the final image."
+    }
+  }
+}
+

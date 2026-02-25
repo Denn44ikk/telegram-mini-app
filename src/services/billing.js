@@ -1,11 +1,23 @@
 const { adjustUserBalance, getBalance } = require('../../db');
 const { debugLog } = require('../utils/logger');
+const botConfig = require('../../botConfig.json');
 
-/** Стоимость одного фото: Стандарт 15, Про 30 */
-const PRICE_PER_IMAGE = {
-    'google/gemini-2.5-flash-image': 15,
-    'google/gemini-3-pro-image-preview': 30
-};
+/** Стоимость одного фото: читается из botConfig.json */
+const PRICE_PER_IMAGE = {};
+
+if (Array.isArray(botConfig.models)) {
+    for (const model of botConfig.models) {
+        if (model && model.id && typeof model.pricePerImage === 'number') {
+            PRICE_PER_IMAGE[model.id] = model.pricePerImage;
+        }
+    }
+}
+
+// Fallback на старые значения, если конфиг пустой или без цен
+if (Object.keys(PRICE_PER_IMAGE).length === 0) {
+    PRICE_PER_IMAGE['google/gemini-2.5-flash-image'] = 15;
+    PRICE_PER_IMAGE['google/gemini-3-pro-image-preview'] = 30;
+}
 
 function getPricePerImage(modelId) {
     return PRICE_PER_IMAGE[modelId] ?? 15;

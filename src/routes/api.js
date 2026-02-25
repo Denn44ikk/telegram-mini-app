@@ -24,6 +24,22 @@ const {
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
+// Разрешённые форматы изображений на сервере
+const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+
+function ensureSupportedImage(file, res, contextLabel) {
+    if (!file) return null;
+    const mime = file.mimetype || 'image/jpeg';
+    if (!ALLOWED_IMAGE_MIME_TYPES.includes(mime)) {
+        debugLog(`${contextLabel} UNSUPPORTED_MIME`, { mime, size: file.size });
+        res.status(400).json({
+            error: 'Этот формат изображения не поддерживается. Загрузите JPG, PNG или WebP.'
+        });
+        return null;
+    }
+    return mime;
+}
+
 router.use((req, res, next) => {
     if (req.path === '/telegram-webhook') {
         debugLog('INCOMING REQUEST', {
@@ -87,7 +103,8 @@ router.post('/generate-image', upload.single('image'), async (req, res) => {
             return res.status(400).json({ error: 'Нужны prompt и image' });
         }
         const buffer = file.buffer;
-        const mime = file.mimetype || 'image/jpeg';
+        const mime = ensureSupportedImage(file, res, 'GENERATE-IMAGE');
+        if (!mime) return;
         const imageBase64 = `data:${mime};base64,${buffer.toString('base64')}`;
         debugLog('GENERATE-IMAGE UPLOAD', {
             ok: true,
@@ -116,7 +133,8 @@ router.post('/product-gen-image', upload.single('image'), async (req, res) => {
             return res.status(400).json({ error: 'Нужны prompt и image' });
         }
         const buffer = file.buffer;
-        const mime = file.mimetype || 'image/jpeg';
+        const mime = ensureSupportedImage(file, res, 'PRODUCT-UPLOAD');
+        if (!mime) return;
         const imageBase64 = `data:${mime};base64,${buffer.toString('base64')}`;
         debugLog('PRODUCT-UPLOAD', {
             ok: true,
@@ -143,7 +161,8 @@ router.post('/poses-gen-image', upload.single('image'), async (req, res) => {
             return res.status(400).json({ error: 'Нужно фото человека' });
         }
         const buffer = file.buffer;
-        const mime = file.mimetype || 'image/jpeg';
+        const mime = ensureSupportedImage(file, res, 'POSES-UPLOAD');
+        if (!mime) return;
         const imageBase64 = `data:${mime};base64,${buffer.toString('base64')}`;
         debugLog('POSES-UPLOAD', {
             ok: true,
