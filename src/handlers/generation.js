@@ -4,7 +4,7 @@ const { callAI, callAIWithMessages } = require('../services/ai');
 const { sendText, sendMediaGroupToTelegram, sendToTelegram } = require('../services/telegram');
 const { getChatId } = require('../utils/telegram');
 const { debugLog } = require('../utils/logger');
-const { chargeUserForModel } = require('../services/billing');
+const { chargeUserForModel, getBalanceCheck } = require('../services/billing');
 
 async function handleGeneration(req, res) {
     if (!process.env.OPENROUTER_API_KEY) {
@@ -27,6 +27,18 @@ async function handleGeneration(req, res) {
         debugLog('DB USER ERROR GEN', { error: e.message, stack: e.stack });
     }
 
+    const check = user?.telegram_user_id ? await getBalanceCheck(user.telegram_user_id, modelId, 'gen') : { allowed: true };
+    if (!check.allowed) {
+        return res.status(402).json({
+            error: check.shortfall != null
+                ? `Недостаточно средств. Вам не хватает ${check.shortfall}. Требуется: ${check.required}, на балансе: ${check.balance}.`
+                : 'Недостаточно средств на балансе. Пополните баланс.',
+            balance: check.balance,
+            required: check.required,
+            shortfall: check.shortfall
+        });
+    }
+
     try {
         const imageUrl = await callAI(prompt, imageBase64, 'gen');
         debugLog('2. РЕЗУЛЬТАТ', '✅ Картинка получена');
@@ -37,7 +49,7 @@ async function handleGeneration(req, res) {
         }
 
         if (user?.telegram_user_id) {
-            await chargeUserForModel(user.telegram_user_id, modelId, { mode: 'gen' });
+            await chargeUserForModel(user.telegram_user_id, modelId, { mode: 'gen', images: 1 });
         }
 
         res.json({ imageUrl, sentToChat });
@@ -65,6 +77,18 @@ async function handleProductGeneration(req, res) {
         debugLog('PRODUCT USER', { created: !!user, userId: user?.telegram_user_id });
     } catch (e) {
         debugLog('DB USER ERROR PRODUCT', { error: e.message, stack: e.stack });
+    }
+
+    const check = user?.telegram_user_id ? await getBalanceCheck(user.telegram_user_id, modelId, 'product') : { allowed: true };
+    if (!check.allowed) {
+        return res.status(402).json({
+            error: check.shortfall != null
+                ? `Недостаточно средств. Вам не хватает ${check.shortfall}. Требуется: ${check.required}, на балансе: ${check.balance}.`
+                : 'Недостаточно средств на балансе. Пополните баланс.',
+            balance: check.balance,
+            required: check.required,
+            shortfall: check.shortfall
+        });
     }
 
     try {
@@ -126,6 +150,18 @@ async function handlePosesGeneration(req, res) {
         debugLog('DB USER ERROR POSES', { error: e.message, stack: e.stack });
     }
 
+    const check = user?.telegram_user_id ? await getBalanceCheck(user.telegram_user_id, modelId, 'poses', posesCount) : { allowed: true };
+    if (!check.allowed) {
+        return res.status(402).json({
+            error: check.shortfall != null
+                ? `Недостаточно средств. Вам не хватает ${check.shortfall}. Требуется: ${check.required}, на балансе: ${check.balance}.`
+                : 'Недостаточно средств на балансе. Пополните баланс.',
+            balance: check.balance,
+            required: check.required,
+            shortfall: check.shortfall
+        });
+    }
+
     try {
         const results = await Promise.all(
             Array(posesCount).fill(null).map(() =>
@@ -185,6 +221,18 @@ async function handleRefPairGeneration(req, res) {
         debugLog('DB USER ERROR REFPAIR', { error: e.message, stack: e.stack });
     }
 
+    const check = user?.telegram_user_id ? await getBalanceCheck(user.telegram_user_id, modelId, 'ref') : { allowed: true };
+    if (!check.allowed) {
+        return res.status(402).json({
+            error: check.shortfall != null
+                ? `Недостаточно средств. Вам не хватает ${check.shortfall}. Требуется: ${check.required}, на балансе: ${check.balance}.`
+                : 'Недостаточно средств на балансе. Пополните баланс.',
+            balance: check.balance,
+            required: check.required,
+            shortfall: check.shortfall
+        });
+    }
+
     try {
         let imageUrl;
 
@@ -204,7 +252,7 @@ async function handleRefPairGeneration(req, res) {
         }
 
         if (user?.telegram_user_id) {
-            await chargeUserForModel(user.telegram_user_id, modelId, { mode: 'ref' });
+            await chargeUserForModel(user.telegram_user_id, modelId, { mode: 'ref', images: 1 });
         }
 
         res.json({ imageUrl, sentToChat });

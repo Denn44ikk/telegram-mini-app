@@ -156,7 +156,7 @@ async function getOrCreateUser(initData, chatIdFromMessage) {
                     user.username || null,
                     user.first_name || null,
                     user.last_name || null,
-                    0,
+                    30,
                     refCode,
                     referredBy
                 ]

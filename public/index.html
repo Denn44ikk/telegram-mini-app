@@ -735,7 +735,7 @@
             <a href="https://telegra.ph/Politika-konfidencialnosti-08-15-17" target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a>
             <a href="https://telegra.ph/Polzovatelskoe-soglashenie-08-15-10" target="_blank" rel="noopener noreferrer">Пользовательское соглашение</a>
             <p style="margin: 0; color: var(--hint-color); font-size: 13px;">
-                По всем вопросам и проблемам вы можете обратиться в поддержку через команду <b>/info</b> в боте.
+                По всем возникающим вопросам или проблемам пишите нашей поддержке: @proverkadopakk
             </p>
         </div>
     </div>
@@ -1342,7 +1342,13 @@
                     container.querySelector('.placeholder-text').style.display = 'none';
                     tg.HapticFeedback.notificationOccurred('success');
                 } else {
-                    tg.showAlert(data.error || 'Ошибка');
+                    const msg = data.error || 'Ошибка';
+                    if (res.status === 402 && (data.shortfall != null || data.required != null)) {
+                        tg.showAlert(msg);
+                        loadBalance();
+                    } else {
+                        tg.showAlert(msg);
+                    }
                     uiLog('runGeneration:noResult', { type, data });
                     tg.HapticFeedback.notificationOccurred('error');
                 }

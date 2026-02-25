@@ -15,7 +15,7 @@ function loadConfig() {
         const data = fs.readFileSync(CONFIG_PATH, 'utf8');
         return JSON.parse(data);
     } catch (e) {
-        return { modelId: 'google/gemini-3-pro-image-preview' };
+        return { modelId: 'google/gemini-2.5-flash-image' };
     }
 }
 
@@ -24,7 +24,7 @@ function saveConfig(config) {
 }
 
 function getModelId() {
-    return loadConfig().modelId || 'google/gemini-3-pro-image-preview';
+    return loadConfig().modelId || 'google/gemini-2.5-flash-image';
 }
 
 function setModelId(modelId) {
