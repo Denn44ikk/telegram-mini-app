@@ -174,4 +174,65 @@ async function sendToTelegram(chatId, resource, caption, isDocument) {
     }
 }
 
-module.exports = { sendText, sendTextWithKeyboard, answerCallbackQuery, setBotCommands, sendMediaGroupToTelegram, sendToTelegram };
+/**
+ * Создать ссылку на счёт для оплаты (Telegram Stars или провайдер).
+ * @param {Object} opts - title, description, payload (1-128 байт), currency ('XTR' для Stars), prices [{ label, amount }], providerToken ('' для Stars)
+ * @returns {Promise<string|null>} URL счёта или null
+ */
+async function createInvoiceLink(opts) {
+    try {
+        if (!TG_TOKEN) {
+            debugLog('CREATE_INVOICE_LINK ERROR', 'TELEGRAM_BOT_TOKEN not set in .env');
+            return null;
+        }
+        const body = {
+            title: opts.title,
+            description: opts.description,
+            payload: opts.payload,
+            currency: opts.currency,
+            prices: opts.prices
+        };
+        if (opts.providerToken !== undefined && opts.providerToken !== null) {
+            body.provider_token = opts.providerToken;
+        }
+        const response = await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/createInvoiceLink`, body);
+        const link = response.data?.result;
+        debugLog('CREATE_INVOICE_LINK', { ok: !!link });
+        return link || null;
+    } catch (e) {
+        debugLog('CREATE_INVOICE_LINK ERROR', { error: e.message, response: e.response?.data });
+        return null;
+    }
+}
+
+/**
+ * Подтвердить pre_checkout_query (обязательно ответить в течение 10 секунд).
+ * @param {string} preCheckoutQueryId
+ * @param {boolean} ok
+ * @param {string} [errorMessage] - если ok === false
+ */
+async function answerPreCheckoutQuery(preCheckoutQueryId, ok, errorMessage) {
+    try {
+        if (!TG_TOKEN) return false;
+        await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/answerPreCheckoutQuery`, {
+            pre_checkout_query_id: preCheckoutQueryId,
+            ok: !!ok,
+            error_message: ok ? undefined : (errorMessage || 'Ошибка оплаты')
+        });
+        return true;
+    } catch (e) {
+        debugLog('ANSWER_PRE_CHECKOUT ERROR', e.message);
+        return false;
+    }
+}
+
+module.exports = {
+    sendText,
+    sendTextWithKeyboard,
+    answerCallbackQuery,
+    answerPreCheckoutQuery,
+    setBotCommands,
+    sendMediaGroupToTelegram,
+    sendToTelegram,
+    createInvoiceLink
+};

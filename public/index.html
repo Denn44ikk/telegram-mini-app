@@ -382,6 +382,46 @@
         #terms-overlay .main-btn { width: 100%; margin-top: 8px; }
         #terms-overlay .main-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+        .topup-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9998;
+            background: rgba(0,0,0,.7);
+            backdrop-filter: blur(12px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            box-sizing: border-box;
+        }
+        .topup-overlay[style*="display: none"] { display: none !important; }
+        .topup-modal {
+            width: 100%;
+            max-width: 340px;
+            background: rgba(255,255,255,.08);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,.12);
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+            box-shadow: 0 8px 40px rgba(0,0,0,.4);
+        }
+        .topup-modal h3 { margin: 0 0 8px; font-size: 20px; color: #fff; }
+        .topup-hint { color: var(--hint-color); font-size: 13px; margin-bottom: 20px; }
+        .topup-amounts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+        .topup-amount-btn {
+            padding: 16px;
+            font-size: 18px;
+            font-weight: 600;
+            color: #fff;
+            background: rgba(139,92,246,.25);
+            border: 1px solid rgba(139,92,246,.5);
+            border-radius: 12px;
+            cursor: pointer;
+        }
+        .topup-amount-btn:active { opacity: 0.9; }
+        .topup-close { width: 100%; padding: 12px; background: transparent; border: 1px solid rgba(255,255,255,.2); border-radius: 10px; color: var(--hint-color); cursor: pointer; font-size: 14px; }
+
         .product-result-wrap {
             display: none;
             width: 100%;
@@ -859,7 +899,22 @@
             Реферальная программа скоро будет доступна.
         </div>
         <div style="text-align: center; color: var(--hint-color); margin-top: 20px;">История пуста</div>
-        <button class="main-btn" onclick="showErrorToast('Функция пополнения скоро будет доступна.')">Пополнить</button>
+        <button class="main-btn" onclick="showTopUpModal()">Пополнить</button>
+    </div>
+
+    <!-- Модальное окно выбора суммы пополнения (Platega СБП или Telegram Stars) -->
+    <div id="topup-modal" class="topup-overlay" style="display: none;">
+        <div class="topup-modal">
+            <h3>Пополнение баланса</h3>
+            <p class="topup-hint" id="topup-hint">Выберите сумму. Оплата через СБП.</p>
+            <div class="topup-amounts">
+                <button type="button" class="topup-amount-btn" data-amount="50">50</button>
+                <button type="button" class="topup-amount-btn" data-amount="100">100</button>
+                <button type="button" class="topup-amount-btn" data-amount="200">200</button>
+                <button type="button" class="topup-amount-btn" data-amount="500">500</button>
+            </div>
+            <button type="button" class="topup-close" onclick="hideTopUpModal()">Отмена</button>
+        </div>
     </div>
 
         </div><!-- .app-wrap -->
@@ -1051,6 +1106,109 @@
             if (screenId === 'settings-screen') loadSettings();
             if (screenId === 'balance-screen') loadBalance();
         }
+
+        let plategaEnabled = false;
+
+        async function showTopUpModal() {
+            const el = document.getElementById('topup-modal');
+            const hintEl = document.getElementById('topup-hint');
+            if (el) el.style.display = 'flex';
+            try {
+                const r = await fetch('/api/payment/platega-enabled');
+                const d = await r.json();
+                plategaEnabled = !!d.enabled;
+                if (hintEl) {
+                    hintEl.textContent = plategaEnabled
+                        ? 'Выберите сумму (₽). Оплата через СБП (Platega).'
+                        : 'Выберите сумму (в BNB). Оплата через Telegram Stars.';
+                }
+            } catch (_) {
+                if (hintEl) hintEl.textContent = 'Выберите сумму.';
+            }
+        }
+        function hideTopUpModal() {
+            const el = document.getElementById('topup-modal');
+            if (el) el.style.display = 'none';
+        }
+
+        async function requestPlategaPay(amount) {
+            hideTopUpModal();
+            try {
+                const res = await fetch('/api/payment/platega-create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initData: tg.initData || '', amount: amount })
+                });
+                const data = await res.json();
+                if (data.error) {
+                    showErrorToast(data.error);
+                    return;
+                }
+                if (!data.redirect) {
+                    showErrorToast('Не удалось создать платёж');
+                    return;
+                }
+                if (tg.openLink) {
+                    tg.openLink(data.redirect);
+                } else {
+                    window.open(data.redirect, '_blank');
+                }
+                if (tg.showAlert) tg.showAlert('После оплаты баланс пополнится автоматически. Вернитесь в приложение.');
+            } catch (e) {
+                uiLog('requestPlategaPay:error', { message: e.message });
+                showErrorToast('Ошибка при создании платежа');
+            }
+        }
+
+        async function requestInvoiceAndPay(amount) {
+            hideTopUpModal();
+            try {
+                const res = await fetch('/api/payment/invoice-link', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initData: tg.initData || '', amount: amount })
+                });
+                const data = await res.json();
+                if (data.error) {
+                    showErrorToast(data.error);
+                    return;
+                }
+                if (!data.invoiceLink) {
+                    showErrorToast('Не удалось создать счёт');
+                    return;
+                }
+                if (tg.openInvoice) {
+                    tg.openInvoice(data.invoiceLink, function(status) {
+                        if (status === 'paid') {
+                            loadBalance();
+                            if (tg.showAlert) tg.showAlert('Баланс пополнен!');
+                        }
+                    });
+                } else {
+                    window.open(data.invoiceLink, '_blank');
+                }
+            } catch (e) {
+                uiLog('requestInvoiceAndPay:error', { message: e.message });
+                showErrorToast('Ошибка при создании платежа');
+            }
+        }
+
+        function onTopUpAmountClick(amount) {
+            if (plategaEnabled) {
+                requestPlategaPay(amount);
+            } else {
+                requestInvoiceAndPay(amount);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.topup-amount-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    const amount = parseInt(btn.dataset.amount, 10);
+                    if (!isNaN(amount)) onTopUpAmountClick(amount);
+                });
+            });
+        });
 
         async function loadSettings() {
             try {

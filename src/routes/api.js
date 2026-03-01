@@ -1,7 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const { getModelId, setModelId, getAvailableModels } = require('../../prompts');
-const { initDb, getOrCreateUser, getBalance, getReferralStats, listUsersWithRefs, setUserBalance, acceptTerms } = require('../../db');
+const { initDb, getOrCreateUser, getBalance, getReferralStats, listUsersWithRefs, setUserBalance, acceptTerms, savePlategaPayment, getPlategaPaymentByTransactionId, setPlategaPaymentCompleted, adjustUserBalance } = require('../../db');
 const { debugLog } = require('../utils/logger');
 const { adminGuard } = require('../middleware/adminGuard');
 const { telegramWebhookGuard } = require('../middleware/telegramWebhookGuard');
@@ -14,6 +14,8 @@ const {
     MIN_AMOUNT,
     MAX_AMOUNT
 } = require('../services/payment');
+const { createInvoiceLink } = require('../services/telegram');
+const { createPlategaPayment } = require('../services/platega');
 const {
     handleGeneration,
     handleProductGeneration,
@@ -415,9 +417,194 @@ router.get('/payment/limits', (req, res) => {
     res.json({
         minAmount: MIN_AMOUNT,
         maxAmount: MAX_AMOUNT,
-        supportedMethods: ['sbp', 'crypto'],
+        supportedMethods: ['sbp', 'crypto', 'telegram_stars'],
         supportedCrypto: ['USDT', 'BTC', 'ETH']
     });
+});
+
+// Лимиты для Telegram Stars (в звёздах). 1 Star = 1 BNB на балансе.
+const STARS_MIN = 10;
+const STARS_MAX = 10000;
+
+/**
+ * Создать ссылку на счёт Telegram (Stars или провайдер) для пополнения баланса.
+ * POST /api/payment/invoice-link
+ * Body: { initData, amount } — amount в Telegram Stars (для XTR) или в минимальных единицах валюты провайдера.
+ */
+router.post('/payment/invoice-link', async (req, res) => {
+    try {
+        const { initData, amount } = req.body || {};
+        const amountNum = parseInt(amount, 10);
+
+        if (!initData) {
+            return res.status(400).json({ error: 'Нужен initData' });
+        }
+        if (!amount || isNaN(amountNum) || amountNum < STARS_MIN || amountNum > STARS_MAX) {
+            return res.status(400).json({
+                error: `Сумма должна быть от ${STARS_MIN} до ${STARS_MAX} звёзд`
+            });
+        }
+
+        const user = await getOrCreateUser(initData, null);
+        if (!user) {
+            return res.status(400).json({ error: 'Не удалось распарсить пользователя из initData' });
+        }
+
+        const providerToken = process.env.PAYMENT_PROVIDER_TOKEN || '';
+        const isStars = !providerToken || providerToken.trim() === '';
+        const currency = isStars ? 'XTR' : (process.env.PAYMENT_CURRENCY || 'RUB');
+        const payload = JSON.stringify({
+            telegram_user_id: user.telegram_user_id,
+            amount_bnb: amountNum
+        });
+        if (Buffer.byteLength(payload, 'utf8') > 128) {
+            return res.status(400).json({ error: 'Payload слишком длинный' });
+        }
+
+        const invoiceLink = await createInvoiceLink({
+            title: 'Пополнение баланса',
+            description: `Пополнение на ${amountNum} BNB (PromoShoot Coins)`,
+            payload,
+            providerToken: isStars ? '' : providerToken,
+            currency,
+            prices: [{ label: 'BNB', amount: amountNum }]
+        });
+
+        if (!invoiceLink) {
+            debugLog('API PAYMENT INVOICE_LINK', 'createInvoiceLink returned null');
+            return res.status(500).json({ error: 'Не удалось создать счёт. Проверьте TELEGRAM_BOT_TOKEN и настройки платежей.' });
+        }
+
+        debugLog('API PAYMENT INVOICE_LINK', {
+            userId: user.telegram_user_id,
+            amount: amountNum,
+            currency
+        });
+
+        res.json({ success: true, invoiceLink });
+    } catch (e) {
+        debugLog('API PAYMENT INVOICE_LINK ERROR', e.message);
+        res.status(500).json({ error: 'Ошибка создания счёта', details: e.message });
+    }
+});
+
+// ========== Platega (СБП и др.) ==========
+const PLATEGA_AMOUNT_MIN = 10;
+const PLATEGA_AMOUNT_MAX = 50000;
+
+/**
+ * Создать платёж через Platega (СБП).
+ * POST /api/payment/platega-create
+ * Body: { initData, amount } — amount в рублях (можно с копейками, например 100.5)
+ */
+router.post('/payment/platega-create', async (req, res) => {
+    try {
+        const { initData, amount } = req.body || {};
+        const amountRub = parseFloat(String(amount).replace(',', '.'));
+
+        if (!initData) {
+            return res.status(400).json({ error: 'Нужен initData' });
+        }
+        if (isNaN(amountRub) || amountRub < PLATEGA_AMOUNT_MIN || amountRub > PLATEGA_AMOUNT_MAX) {
+            return res.status(400).json({
+                error: `Сумма должна быть от ${PLATEGA_AMOUNT_MIN} до ${PLATEGA_AMOUNT_MAX} ₽`
+            });
+        }
+
+        const user = await getOrCreateUser(initData, null);
+        if (!user) {
+            return res.status(400).json({ error: 'Не удалось распарсить пользователя из initData' });
+        }
+
+        const baseUrl = (process.env.BASE_URL || process.env.APP_URL || '').replace(/\/$/, '');
+        const returnUrl = baseUrl ? `${baseUrl}/pay-success` : `https://t.me/${(process.env.BOT_USERNAME || '').replace(/^@/, '')}`;
+        const failedUrl = baseUrl ? `${baseUrl}/pay-fail` : returnUrl;
+        const amountBnb = Math.round(amountRub);
+
+        const result = await createPlategaPayment({
+            amount: amountRub,
+            currency: 'RUB',
+            description: `Пополнение баланса на ${amountBnb} BNB`,
+            returnUrl,
+            failedUrl,
+            payload: JSON.stringify({ telegram_user_id: user.telegram_user_id, amount_bnb: amountBnb }),
+            paymentMethod: parseInt(process.env.PLATEGA_PAYMENT_METHOD || '2', 10)
+        });
+
+        if (!result.success) {
+            return res.status(400).json({ error: result.error });
+        }
+
+        await initDb();
+        await savePlategaPayment(result.transactionId, user.telegram_user_id, amountRub, amountBnb);
+
+        debugLog('API PAYMENT PLATEGA CREATE', {
+            userId: user.telegram_user_id,
+            amountRub,
+            transactionId: result.transactionId
+        });
+
+        res.json({ success: true, redirect: result.redirect, transactionId: result.transactionId });
+    } catch (e) {
+        debugLog('API PAYMENT PLATEGA CREATE ERROR', e.message);
+        res.status(500).json({ error: 'Ошибка создания платежа', details: e.message });
+    }
+});
+
+/**
+ * Callback (webhook) от Platega после оплаты.
+ * POST /api/payment/platega-callback
+ * В настройках мерчанта в ЛК Platega укажите URL: https://ваш-домен.com/api/payment/platega-callback
+ * Обрабатываем дубликаты: повторная обработка уже завершённого платежа не меняет баланс.
+ */
+router.post('/payment/platega-callback', async (req, res) => {
+    try {
+        const body = req.body || {};
+        const transactionId = body.transactionId ?? body.transaction_id ?? body.id;
+        const status = (body.status || '').toUpperCase();
+
+        if (!transactionId) {
+            debugLog('PLATEGA CALLBACK', 'Нет transactionId в теле');
+            return res.status(400).json({ error: 'No transactionId' });
+        }
+
+        const payment = await getPlategaPaymentByTransactionId(transactionId);
+        if (!payment) {
+            debugLog('PLATEGA CALLBACK', 'Платёж не найден', { transactionId });
+            return res.status(404).json({ error: 'Payment not found' });
+        }
+
+        if (payment.status === 'COMPLETED') {
+            res.status(200).json({ ok: true, message: 'Already processed' });
+            return;
+        }
+
+        const successStatuses = ['PAID', 'SUCCESS', 'COMPLETED', 'CONFIRMED'];
+        if (!successStatuses.includes(status)) {
+            debugLog('PLATEGA CALLBACK', 'Статус не успешный', { transactionId, status });
+            res.status(200).json({ ok: true, message: 'Status not success' });
+            return;
+        }
+
+        await adjustUserBalance(payment.telegram_user_id, payment.amount_bnb);
+        await setPlategaPaymentCompleted(transactionId);
+
+        debugLog('PLATEGA CALLBACK', { transactionId, userId: payment.telegram_user_id, amountBnb: payment.amount_bnb });
+
+        res.status(200).json({ ok: true, message: 'Payment completed' });
+    } catch (e) {
+        debugLog('PLATEGA CALLBACK ERROR', e.message);
+        res.status(500).json({ ok: false, error: e.message });
+    }
+});
+
+/**
+ * Проверить, настроена ли Platega (для фронта).
+ * GET /api/payment/platega-enabled
+ */
+router.get('/payment/platega-enabled', (req, res) => {
+    const enabled = !!(process.env.PLATEGA_MERCHANT_ID && process.env.PLATEGA_SECRET);
+    res.json({ enabled });
 });
 
 module.exports = { apiRouter: router };

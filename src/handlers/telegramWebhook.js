@@ -1,6 +1,6 @@
-const { initDb, getOrCreateUser, getUserByTelegramId, acceptTerms, deleteUserByTelegramId, deleteUserByUsername, deleteAllUsersExcept } = require('../../db');
+const { initDb, getOrCreateUser, getUserByTelegramId, acceptTerms, deleteUserByTelegramId, deleteUserByUsername, deleteAllUsersExcept, adjustUserBalance } = require('../../db');
 const { debugLog } = require('../utils/logger');
-const { sendText, sendTextWithKeyboard, answerCallbackQuery } = require('../services/telegram');
+const { sendText, sendTextWithKeyboard, answerCallbackQuery, answerPreCheckoutQuery } = require('../services/telegram');
 
 const TERMS_TEXT = `📜 Пользовательское соглашение и Политика конфиденциальности
 
@@ -75,6 +75,57 @@ async function handleTelegramWebhook(req, res) {
             messageText: update.message?.text,
             updateId: update.update_id
         });
+
+        if (update.pre_checkout_query) {
+            const pq = update.pre_checkout_query;
+            const queryId = pq.id;
+            const payload = pq.invoice_payload || '{}';
+            let ok = true;
+            let errorMessage = '';
+            try {
+                const data = JSON.parse(payload);
+                if (!data.telegram_user_id || data.amount == null) {
+                    ok = false;
+                    errorMessage = 'Неверные данные платежа. Попробуйте снова.';
+                }
+            } catch (e) {
+                ok = false;
+                errorMessage = 'Ошибка данных платежа.';
+            }
+            await answerPreCheckoutQuery(queryId, ok, errorMessage);
+            debugLog('TELEGRAM PRE_CHECKOUT', { queryId, ok });
+            res.json({ ok: true });
+            return;
+        }
+
+        if (update.message?.successful_payment) {
+            const msg = update.message;
+            const payment = msg.successful_payment;
+            const payload = payment.invoice_payload || '{}';
+            const telegramPaymentChargeId = payment.telegram_payment_charge_id;
+            let telegramUserId;
+            let amountBnb;
+            try {
+                const data = JSON.parse(payload);
+                telegramUserId = data.telegram_user_id;
+                amountBnb = parseInt(data.amount_bnb, 10);
+            } catch (e) {
+                debugLog('TELEGRAM SUCCESSFUL_PAYMENT PARSE ERROR', { error: e.message, payload });
+                res.json({ ok: true });
+                return;
+            }
+            if (telegramUserId && !isNaN(amountBnb) && amountBnb > 0) {
+                try {
+                    await initDb();
+                    await adjustUserBalance(String(telegramUserId), amountBnb);
+                    debugLog('TELEGRAM SUCCESSFUL_PAYMENT', { telegramUserId, amountBnb, telegramPaymentChargeId });
+                } catch (e) {
+                    debugLog('TELEGRAM SUCCESSFUL_PAYMENT BALANCE ERROR', { error: e.message });
+                }
+            }
+            res.json({ ok: true });
+            return;
+        }
 
         if (update.callback_query) {
             const cb = update.callback_query;

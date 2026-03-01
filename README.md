@@ -241,6 +241,10 @@ telegram-mini-app/
 | `ADMIN_TOKEN` | Токен для админских endpoints | Нет | - |
 | `SUPPORT_CONTACT` | Контакт для вопросов (в команде /info), например @support | Нет | @support |
 | `BOT_USERNAME` | Username бота без @ (для ссылки из мини-приложения) | Нет | - |
+| `PAYMENT_PROVIDER_TOKEN` | Токен платёжного провайдера от @BotFather (Payments). Для **Telegram Stars** оставьте пустым. | Нет | - |
+| `PLATEGA_MERCHANT_ID` | Merchant ID в платёжной системе Platega (выдаёт менеджер). | Нет | - |
+| `PLATEGA_SECRET` | X-Secret (API Key) Platega. | Нет | - |
+| `BASE_URL` | Публичный HTTPS-адрес сервера (например `https://yourdomain.com`) для callback и return URL. | Нет | - |
 | `SBP_PHONE` | Телефон для СБП | Нет | - |
 | `SBP_ACCOUNT` | Счет для СБП | Нет | - |
 | `CRYPTO_*_WALLET` | Адреса криптокошельков | Нет | - |
@@ -622,6 +626,14 @@ const MIN_AMOUNT = 100;      // Минимальная сумма
 const MAX_AMOUNT = 50000;    // Максимальная сумма
 const EXCHANGE_RATE = 1;     // Курс конвертации
 ```
+
+### Platega (СБП)
+
+1. В `.env` укажите `PLATEGA_MERCHANT_ID`, `PLATEGA_SECRET` и `BASE_URL` (HTTPS, например `https://yourdomain.com`).
+2. В личном кабинете Platega в настройках мерчанта укажите **Callback URL**:  
+   `https://ваш-домен.com/api/payment/platega-callback`  
+   (только HTTPS, публичный адрес, без localhost).
+3. После оплаты платформа вызовет этот URL; сервер зачислит BNB на баланс и не обрабатывает дубликаты.
 
 ---
 

@@ -78,7 +78,22 @@ async function initDb() {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         `);
 
-        dbLog('INIT', '✅ Table referrals created/verified');
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS platega_payments (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                transaction_id VARCHAR(64) NOT NULL UNIQUE,
+                telegram_user_id VARCHAR(64) NOT NULL,
+                amount_rub DECIMAL(12,2) NOT NULL,
+                amount_bnb INT NOT NULL,
+                status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                completed_at DATETIME NULL,
+                KEY idx_platega_tx (transaction_id),
+                KEY idx_platega_user (telegram_user_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        `).catch(() => {});
+
+        dbLog('INIT', '✅ Table platega_payments created/verified');
 
         return pool;
     } catch (error) {
@@ -410,6 +425,52 @@ async function deleteUserByUsername(username) {
     }
 }
 
+/** Сохранить платёж Platega (при создании) */
+async function savePlategaPayment(transactionId, telegramUserId, amountRub, amountBnb) {
+    try {
+        const db = await initDb();
+        await db.execute(
+            'INSERT INTO platega_payments (transaction_id, telegram_user_id, amount_rub, amount_bnb, status) VALUES (?, ?, ?, ?, ?)',
+            [String(transactionId), String(telegramUserId), amountRub, amountBnb, 'PENDING']
+        );
+        dbLog('SAVE_PLATEGA_PAYMENT', { transactionId, telegramUserId, amountRub, amountBnb });
+    } catch (error) {
+        dbLog('SAVE_PLATEGA_PAYMENT ERROR', { error: error.message });
+        throw error;
+    }
+}
+
+/** Найти платёж Platega по transaction_id */
+async function getPlategaPaymentByTransactionId(transactionId) {
+    try {
+        const db = await initDb();
+        const [rows] = await db.execute(
+            'SELECT id, transaction_id, telegram_user_id, amount_bnb, status FROM platega_payments WHERE transaction_id = ?',
+            [String(transactionId)]
+        );
+        return rows[0] || null;
+    } catch (error) {
+        dbLog('GET_PLATEGA_PAYMENT ERROR', { error: error.message });
+        throw error;
+    }
+}
+
+/** Отметить платёж Platega как завершённый (идемпотентно) */
+async function setPlategaPaymentCompleted(transactionId) {
+    try {
+        const db = await initDb();
+        const [result] = await db.execute(
+            "UPDATE platega_payments SET status = 'COMPLETED', completed_at = NOW() WHERE transaction_id = ? AND status = 'PENDING'",
+            [String(transactionId)]
+        );
+        dbLog('SET_PLATEGA_PAYMENT_COMPLETED', { transactionId, updated: result.affectedRows > 0 });
+        return result.affectedRows > 0;
+    } catch (error) {
+        dbLog('SET_PLATEGA_PAYMENT_COMPLETED ERROR', { error: error.message });
+        throw error;
+    }
+}
+
 /** Удалить всех пользователей кроме указанного telegram_user_id */
 async function deleteAllUsersExcept(telegramUserId) {
     try {
@@ -442,6 +503,9 @@ module.exports = {
     acceptTerms,
     deleteUserByTelegramId,
     deleteUserByUsername,
-    deleteAllUsersExcept
+    deleteAllUsersExcept,
+    savePlategaPayment,
+    getPlategaPaymentByTransactionId,
+    setPlategaPaymentCompleted
 };
 
