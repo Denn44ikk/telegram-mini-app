@@ -420,6 +420,18 @@
             cursor: pointer;
         }
         .topup-amount-btn:active { opacity: 0.9; }
+        .topup-method-row { display: flex; gap: 10px; margin-bottom: 16px; }
+        .topup-method-btn {
+            flex: 1;
+            padding: 12px;
+            font-size: 14px;
+            color: #fff;
+            background: rgba(255,255,255,.08);
+            border: 1px solid rgba(255,255,255,.2);
+            border-radius: 10px;
+            cursor: pointer;
+        }
+        .topup-method-btn.active { background: rgba(139,92,246,.35); border-color: rgba(139,92,246,.6); }
         .topup-close { width: 100%; padding: 12px; background: transparent; border: 1px solid rgba(255,255,255,.2); border-radius: 10px; color: var(--hint-color); cursor: pointer; font-size: 14px; }
 
         .product-result-wrap {
@@ -902,11 +914,15 @@
         <button class="main-btn" onclick="showTopUpModal()">Пополнить</button>
     </div>
 
-    <!-- Модальное окно выбора суммы пополнения (Platega СБП или Telegram Stars) -->
+    <!-- Модальное окно: способ оплаты (Stars + Platega) и сумма -->
     <div id="topup-modal" class="topup-overlay" style="display: none;">
         <div class="topup-modal">
             <h3>Пополнение баланса</h3>
-            <p class="topup-hint" id="topup-hint">Выберите сумму. Оплата через СБП.</p>
+            <div id="topup-method-row" class="topup-method-row" style="display: none;">
+                <button type="button" class="topup-method-btn" id="topup-method-stars" data-method="stars">⭐ Telegram Stars</button>
+                <button type="button" class="topup-method-btn" id="topup-method-platega" data-method="platega">💳 СБП / карта (Platega)</button>
+            </div>
+            <p class="topup-hint" id="topup-hint">Выберите сумму.</p>
             <div class="topup-amounts">
                 <button type="button" class="topup-amount-btn" data-amount="50">50</button>
                 <button type="button" class="topup-amount-btn" data-amount="100">100</button>
@@ -1108,22 +1124,37 @@
         }
 
         let plategaEnabled = false;
+        let selectedTopUpMethod = 'stars';
+
+        function updateTopUpHint() {
+            const hintEl = document.getElementById('topup-hint');
+            if (!hintEl) return;
+            if (selectedTopUpMethod === 'platega') {
+                hintEl.textContent = 'Выберите сумму в рублях (₽). Оплата через СБП/карту (Platega).';
+            } else {
+                hintEl.textContent = 'Выберите сумму в BNB. Оплата через Telegram Stars.';
+            }
+        }
 
         async function showTopUpModal() {
             const el = document.getElementById('topup-modal');
-            const hintEl = document.getElementById('topup-hint');
+            const methodRow = document.getElementById('topup-method-row');
             if (el) el.style.display = 'flex';
             try {
                 const r = await fetch('/api/payment/platega-enabled');
                 const d = await r.json();
                 plategaEnabled = !!d.enabled;
-                if (hintEl) {
-                    hintEl.textContent = plategaEnabled
-                        ? 'Выберите сумму (₽). Оплата через СБП (Platega).'
-                        : 'Выберите сумму (в BNB). Оплата через Telegram Stars.';
+                selectedTopUpMethod = 'stars';
+                if (methodRow) {
+                    methodRow.style.display = plategaEnabled ? 'flex' : 'none';
                 }
+                document.querySelectorAll('.topup-method-btn').forEach(function(btn) {
+                    btn.classList.toggle('active', btn.dataset.method === selectedTopUpMethod);
+                });
+                updateTopUpHint();
             } catch (_) {
-                if (hintEl) hintEl.textContent = 'Выберите сумму.';
+                if (methodRow) methodRow.style.display = 'none';
+                updateTopUpHint();
             }
         }
         function hideTopUpModal() {
@@ -1194,7 +1225,7 @@
         }
 
         function onTopUpAmountClick(amount) {
-            if (plategaEnabled) {
+            if (selectedTopUpMethod === 'platega') {
                 requestPlategaPay(amount);
             } else {
                 requestInvoiceAndPay(amount);
@@ -1206,6 +1237,15 @@
                 btn.addEventListener('click', function() {
                     const amount = parseInt(btn.dataset.amount, 10);
                     if (!isNaN(amount)) onTopUpAmountClick(amount);
+                });
+            });
+            document.querySelectorAll('.topup-method-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    selectedTopUpMethod = btn.dataset.method || 'stars';
+                    document.querySelectorAll('.topup-method-btn').forEach(function(b) {
+                        b.classList.toggle('active', b.dataset.method === selectedTopUpMethod);
+                    });
+                    updateTopUpHint();
                 });
             });
         });
