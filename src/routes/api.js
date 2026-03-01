@@ -1,7 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const { getModelId, setModelId, getAvailableModels } = require('../../prompts');
-const { initDb, getOrCreateUser, getBalance, getReferralStats, listUsersWithRefs, setUserBalance, acceptTerms, savePlategaPayment, getPlategaPaymentByTransactionId, setPlategaPaymentCompleted, adjustUserBalance } = require('../../db');
+const { initDb, getOrCreateUser, getBalance, getReferralStats, listUsersWithRefs, setUserBalance, acceptTerms, savePlategaPayment, getPlategaPaymentByTransactionId, setPlategaPaymentCompleted, adjustUserBalance, getPlategaPaymentsByUser } = require('../../db');
 const { debugLog } = require('../utils/logger');
 const { adminGuard } = require('../middleware/adminGuard');
 const { telegramWebhookGuard } = require('../middleware/telegramWebhookGuard');
@@ -10,7 +10,6 @@ const {
     createSBPPayment,
     createCryptoPayment,
     verifyPayment,
-    getPaymentHistory,
     MIN_AMOUNT,
     MAX_AMOUNT
 } = require('../services/payment');
@@ -379,7 +378,7 @@ router.get('/payment/verify', async (req, res) => {
 });
 
 /**
- * История платежей пользователя
+ * История пополнений пользователя (из platega_payments)
  * GET /api/payment/history?initData=...
  */
 router.get('/payment/history', async (req, res) => {
@@ -395,14 +394,14 @@ router.get('/payment/history', async (req, res) => {
             return res.status(400).json({ error: 'Не удалось распарсить пользователя из initData' });
         }
 
-        const result = await getPaymentHistory(user.telegram_user_id);
-        
+        const payments = await getPlategaPaymentsByUser(user.telegram_user_id);
+
         debugLog('API PAYMENT HISTORY', {
             userId: user.telegram_user_id,
-            paymentsCount: result.payments?.length || 0
+            paymentsCount: payments.length
         });
 
-        res.json(result);
+        res.json({ success: true, payments });
     } catch (e) {
         debugLog('API PAYMENT HISTORY ERROR', e.message);
         res.status(500).json({ error: 'Ошибка получения истории платежей', details: e.message });

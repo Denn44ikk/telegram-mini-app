@@ -434,6 +434,23 @@
         .topup-method-btn.active { background: rgba(139,92,246,.35); border-color: rgba(139,92,246,.6); }
         .topup-close { width: 100%; padding: 12px; background: transparent; border: 1px solid rgba(255,255,255,.2); border-radius: 10px; color: var(--hint-color); cursor: pointer; font-size: 14px; }
 
+        .history-list-wrap { padding: 16px; }
+        .history-msg { text-align: center; color: var(--hint-color); padding: 24px; font-size: 14px; }
+        .history-list { list-style: none; margin: 0; padding: 0; }
+        .history-list li {
+            background: rgba(255,255,255,.06);
+            border: 1px solid rgba(255,255,255,.1);
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 10px;
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+        }
+        .history-list li .history-amount { font-weight: 600; color: #fff; }
+        .history-list li .history-date { font-size: 12px; color: var(--hint-color); }
+        .history-list li .history-status { font-size: 12px; padding: 2px 8px; border-radius: 6px; }
+        .history-list li .history-status.COMPLETED { background: rgba(34,197,94,.2); color: #22c55e; }
+        .history-list li .history-status.PENDING { background: rgba(234,179,8,.2); color: #eab308; }
+
         .product-result-wrap {
             display: none;
             width: 100%;
@@ -910,8 +927,22 @@
         <div id="ref-info" style="text-align: center; color: var(--hint-color); margin-top: 12px; font-size: 13px;">
             Реферальная программа скоро будет доступна.
         </div>
-        <div style="text-align: center; color: var(--hint-color); margin-top: 20px;">История пуста</div>
-        <button class="main-btn" onclick="showTopUpModal()">Пополнить</button>
+        <button class="main-btn" style="margin-bottom: 10px;" onclick="showTopUpModal()">Пополнить</button>
+        <button class="main-btn" style="background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2);" onclick="navTo('history-screen')">История пополнений</button>
+    </div>
+
+    <!-- 5.1 Экран истории пополнений -->
+    <div id="history-screen" class="screen">
+        <div class="nav-bar">
+            <button class="icon-btn" onclick="navTo('balance-screen')"><i class="fa-solid fa-arrow-left"></i></button>
+            <h3>История пополнений</h3>
+            <div style="width: 24px;"></div>
+        </div>
+        <div id="history-list-wrap" class="history-list-wrap">
+            <div id="history-loading" class="history-msg">Загрузка...</div>
+            <div id="history-empty" class="history-msg" style="display: none;">История пополнений пуста</div>
+            <ul id="history-list" class="history-list"></ul>
+        </div>
     </div>
 
     <!-- Модальное окно: способ оплаты (Stars + Platega) и сумма -->
@@ -1113,14 +1144,15 @@
             uiLog('navTo', { screenId });
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
             document.getElementById(screenId).classList.add('active');
-            if(screenId === 'menu-screen') {
+            if (screenId === 'menu-screen') {
                 tg.BackButton.hide();
             } else {
                 tg.BackButton.show();
-                tg.BackButton.onClick(() => navTo('menu-screen'));
+                tg.BackButton.onClick(() => navTo(screenId === 'history-screen' ? 'balance-screen' : 'menu-screen'));
             }
             if (screenId === 'settings-screen') loadSettings();
             if (screenId === 'balance-screen') loadBalance();
+            if (screenId === 'history-screen') loadPaymentHistory();
         }
 
         let plategaEnabled = false;
@@ -1324,6 +1356,45 @@
                 }
             } catch (e) {
                 uiLog('loadBalance:error', { message: e.message });
+            }
+        }
+
+        async function loadPaymentHistory() {
+            const listEl = document.getElementById('history-list');
+            const loadingEl = document.getElementById('history-loading');
+            const emptyEl = document.getElementById('history-empty');
+            if (!listEl || !loadingEl || !emptyEl) return;
+            listEl.innerHTML = '';
+            loadingEl.style.display = 'block';
+            emptyEl.style.display = 'none';
+            try {
+                const url = `/api/payment/history?initData=${encodeURIComponent(tg.initData || '')}`;
+                const res = await fetch(url);
+                const data = await res.json();
+                loadingEl.style.display = 'none';
+                if (data.error) {
+                    emptyEl.textContent = 'Не удалось загрузить историю';
+                    emptyEl.style.display = 'block';
+                    return;
+                }
+                const payments = data.payments || [];
+                if (payments.length === 0) {
+                    emptyEl.textContent = 'История пополнений пуста';
+                    emptyEl.style.display = 'block';
+                    return;
+                }
+                payments.forEach(function(p) {
+                    const date = p.createdAt ? new Date(p.createdAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+                    const statusClass = (p.status === 'COMPLETED') ? 'COMPLETED' : 'PENDING';
+                    const statusText = p.status === 'COMPLETED' ? 'Зачислено' : 'В обработке';
+                    const li = document.createElement('li');
+                    li.innerHTML = '<span class="history-date">' + date + '</span><span class="history-amount">' + (p.amountBnb || 0) + ' BNB</span><span class="history-status ' + statusClass + '">' + statusText + '</span>' + (p.amountRub ? '<span class="history-date">' + p.amountRub + ' ₽</span>' : '');
+                    listEl.appendChild(li);
+                });
+            } catch (e) {
+                loadingEl.style.display = 'none';
+                emptyEl.textContent = 'Ошибка загрузки';
+                emptyEl.style.display = 'block';
             }
         }
 

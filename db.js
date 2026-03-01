@@ -455,6 +455,28 @@ async function getPlategaPaymentByTransactionId(transactionId) {
     }
 }
 
+/** История пополнений пользователя (Platega) */
+async function getPlategaPaymentsByUser(telegramUserId) {
+    try {
+        const db = await initDb();
+        const [rows] = await db.execute(
+            'SELECT transaction_id, amount_rub, amount_bnb, status, created_at FROM platega_payments WHERE telegram_user_id = ? ORDER BY created_at DESC LIMIT 100',
+            [String(telegramUserId)]
+        );
+        return rows.map(r => ({
+            id: r.transaction_id,
+            amountRub: Number(r.amount_rub),
+            amountBnb: r.amount_bnb,
+            status: r.status,
+            method: 'platega',
+            createdAt: r.created_at
+        }));
+    } catch (error) {
+        dbLog('GET_PLATEGA_PAYMENTS_BY_USER ERROR', { error: error.message });
+        throw error;
+    }
+}
+
 /** Отметить платёж Platega как завершённый (идемпотентно) */
 async function setPlategaPaymentCompleted(transactionId) {
     try {
@@ -506,6 +528,7 @@ module.exports = {
     deleteAllUsersExcept,
     savePlategaPayment,
     getPlategaPaymentByTransactionId,
-    setPlategaPaymentCompleted
+    setPlategaPaymentCompleted,
+    getPlategaPaymentsByUser
 };
 
