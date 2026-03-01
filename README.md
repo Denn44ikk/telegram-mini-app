@@ -242,6 +242,7 @@ telegram-mini-app/
 | `SUPPORT_CONTACT` | Контакт для вопросов (в команде /info), например @support | Нет | @support |
 | `BOT_USERNAME` | Username бота без @ (для ссылки из мини-приложения) | Нет | - |
 | `PAYMENT_PROVIDER_TOKEN` | Токен платёжного провайдера от @BotFather (Payments). Для **Telegram Stars** оставьте пустым. | Нет | - |
+| `STARS_TO_BNB_RATE` | Курс звёзд → BNB: сколько BNB начислять за 1 звезду (например `0.01` = 100 звёзд → 1 BNB). | Нет | 0.01 |
 | `PLATEGA_MERCHANT_ID` | Merchant ID в платёжной системе Platega (выдаёт менеджер). | Нет | - |
 | `PLATEGA_SECRET` | X-Secret (API Key) Platega. | Нет | - |
 | `BASE_URL` | Публичный HTTPS-адрес сервера (например `https://yourdomain.com`) для callback и return URL. | Нет | - |
@@ -680,6 +681,9 @@ curl -X POST "http://localhost:4000/api/admin/set-balance?token=YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"telegram_user_id": "123456", "balance": 1000}'
 ```
+
+**Пополнение баланса из бота (только для пользователя den_bessonovv):**  
+В чате с ботом: `/balance <username> <сумма>` — пополнить баланс пользователя по username без оплаты. Пример: `/balance ivanov 100`.
 
 ---
 

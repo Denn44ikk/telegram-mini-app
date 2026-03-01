@@ -686,6 +686,19 @@
                 width: calc(100% - 24px);
             }
         }
+        /* На компьютере принудительно светлый текст (Telegram может отдавать тёмную тему) */
+        @media (min-width: 481px) {
+            :root {
+                --text-color: #f0f0f0;
+                --hint-color: #94a3b8;
+            }
+            body, .app-wrap, .nav-bar h3, .balance-amount, .menu-btn, .input-card textarea, .result-placeholder .placeholder-text p {
+                color: #f0f0f0 !important;
+            }
+        }
+        .topup-custom-row { margin-top: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .topup-custom-row input { width: 100px; padding: 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,.2); background: var(--secondary-bg); color: var(--text-color); font-size: 16px; }
+        .topup-submit-btn { margin-top: 12px; width: 100%; padding: 14px; border-radius: 16px; background: var(--button-color); color: var(--button-text); font-size: 16px; font-weight: 600; border: none; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -907,7 +920,7 @@
             <a href="https://telegra.ph/Politika-konfidencialnosti-08-15-17" target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a>
             <a href="https://telegra.ph/Polzovatelskoe-soglashenie-08-15-10" target="_blank" rel="noopener noreferrer">Пользовательское соглашение</a>
             <p style="margin: 0; color: var(--hint-color); font-size: 13px;">
-                По всем возникающим вопросам или проблемам пишите нашей поддержке: @proverkadopakk
+                По всем возникающим вопросам или проблемам пишите нашей поддержке: <a id="support-link" href="https://t.me/proverkadopakk" target="_blank" rel="noopener noreferrer" style="color: var(--button-color); text-decoration: none;">@proverkadopakk</a>
             </p>
         </div>
     </div>
@@ -950,15 +963,20 @@
         <div class="topup-modal">
             <h3>Пополнение баланса</h3>
             <div id="topup-method-row" class="topup-method-row" style="display: none;">
-                <button type="button" class="topup-method-btn" id="topup-method-stars" data-method="stars">⭐ Telegram Stars</button>
-                <button type="button" class="topup-method-btn" id="topup-method-platega" data-method="platega">💳 СБП / карта (Platega)</button>
+                <button type="button" class="topup-method-btn" id="topup-method-stars" data-method="stars">⭐ Stars</button>
+                <button type="button" class="topup-method-btn" id="topup-method-platega" data-method="platega">💳 СБП (Platega)</button>
+                <button type="button" class="topup-method-btn" id="topup-method-crypto" data-method="crypto">₿ Крипто</button>
             </div>
-            <p class="topup-hint" id="topup-hint">Выберите сумму.</p>
+            <p class="topup-hint" id="topup-hint">Выберите сумму или введите свою.</p>
             <div class="topup-amounts">
                 <button type="button" class="topup-amount-btn" data-amount="50">50</button>
                 <button type="button" class="topup-amount-btn" data-amount="100">100</button>
                 <button type="button" class="topup-amount-btn" data-amount="200">200</button>
                 <button type="button" class="topup-amount-btn" data-amount="500">500</button>
+            </div>
+            <div class="topup-custom-row">
+                <input type="number" id="topup-custom-amount" placeholder="Своя сумма" min="1" step="1" inputmode="numeric">
+                <button type="button" class="topup-submit-btn" id="topup-submit-btn">Пополнить</button>
             </div>
             <button type="button" class="topup-close" onclick="hideTopUpModal()">Отмена</button>
         </div>
@@ -1158,34 +1176,48 @@
         let plategaEnabled = false;
         let selectedTopUpMethod = 'stars';
 
+        let paymentLimits = { starsMin: 10, starsMax: 10000, plategaMin: 10, plategaMax: 50000, cryptoMin: 100, cryptoMax: 50000 };
+
         function updateTopUpHint() {
             const hintEl = document.getElementById('topup-hint');
             if (!hintEl) return;
             if (selectedTopUpMethod === 'platega') {
-                hintEl.textContent = 'Выберите сумму в рублях (₽). Оплата через СБП/карту (Platega).';
+                hintEl.textContent = 'Сумма в рублях (₽), от ' + paymentLimits.plategaMin + ' до ' + paymentLimits.plategaMax + '.';
+            } else if (selectedTopUpMethod === 'crypto') {
+                hintEl.textContent = 'Сумма в рублях (₽), от ' + paymentLimits.cryptoMin + ' до ' + paymentLimits.cryptoMax + '. USDT/BTC/ETH.';
             } else {
-                hintEl.textContent = 'Выберите сумму в BNB. Оплата через Telegram Stars.';
+                hintEl.textContent = 'Сумма в звёздах, от ' + paymentLimits.starsMin + ' до ' + paymentLimits.starsMax + '. Курс: звёзды → BNB на балансе.';
             }
         }
 
         async function showTopUpModal() {
             const el = document.getElementById('topup-modal');
             const methodRow = document.getElementById('topup-method-row');
+            const customInput = document.getElementById('topup-custom-amount');
             if (el) el.style.display = 'flex';
+            if (customInput) customInput.value = '';
             try {
-                const r = await fetch('/api/payment/platega-enabled');
-                const d = await r.json();
-                plategaEnabled = !!d.enabled;
+                const [limitsRes, plategaRes] = await Promise.all([
+                    fetch('/api/payment/limits'),
+                    fetch('/api/payment/platega-enabled')
+                ]);
+                const limitsData = await limitsRes.json();
+                if (limitsData.starsMin != null) paymentLimits.starsMin = limitsData.starsMin;
+                if (limitsData.starsMax != null) paymentLimits.starsMax = limitsData.starsMax;
+                if (limitsData.plategaMin != null) paymentLimits.plategaMin = limitsData.plategaMin;
+                if (limitsData.plategaMax != null) paymentLimits.plategaMax = limitsData.plategaMax;
+                if (limitsData.cryptoMin != null) paymentLimits.cryptoMin = limitsData.cryptoMin;
+                if (limitsData.cryptoMax != null) paymentLimits.cryptoMax = limitsData.cryptoMax;
+                const plategaData = await plategaRes.json();
+                plategaEnabled = !!plategaData.enabled;
                 selectedTopUpMethod = 'stars';
-                if (methodRow) {
-                    methodRow.style.display = plategaEnabled ? 'flex' : 'none';
-                }
+                if (methodRow) methodRow.style.display = 'flex';
                 document.querySelectorAll('.topup-method-btn').forEach(function(btn) {
                     btn.classList.toggle('active', btn.dataset.method === selectedTopUpMethod);
                 });
                 updateTopUpHint();
             } catch (_) {
-                if (methodRow) methodRow.style.display = 'none';
+                if (methodRow) methodRow.style.display = 'flex';
                 updateTopUpHint();
             }
         }
@@ -1256,11 +1288,51 @@
             }
         }
 
+        async function requestCryptoPay(amountRub) {
+            hideTopUpModal();
+            try {
+                const res = await fetch('/api/payment/crypto', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initData: tg.initData || '', amount: amountRub, cryptoType: 'USDT' })
+                });
+                const data = await res.json();
+                if (data.error) {
+                    showErrorToast(data.error);
+                    return;
+                }
+                const p = data.payment || data;
+                const wallet = (p.cryptoData && p.cryptoData.walletAddress) || p.walletAddress || '';
+                const amountCrypto = (p.cryptoData && p.cryptoData.amountCrypto) || p.amountCrypto || '';
+                const msg = 'Переведите ' + amountCrypto + ' USDT (TRC20) на адрес:\n' + wallet + '\n\nПосле оплаты баланс пополнится после проверки.';
+                if (tg.showAlert) tg.showAlert(msg);
+                else showErrorToast(msg);
+            } catch (e) {
+                uiLog('requestCryptoPay:error', { message: e.message });
+                showErrorToast('Ошибка при создании криптоплатежа');
+            }
+        }
+
+        function getTopUpLimits() {
+            if (selectedTopUpMethod === 'platega') return { min: paymentLimits.plategaMin, max: paymentLimits.plategaMax };
+            if (selectedTopUpMethod === 'crypto') return { min: paymentLimits.cryptoMin, max: paymentLimits.cryptoMax };
+            return { min: paymentLimits.starsMin, max: paymentLimits.starsMax };
+        }
+
         function onTopUpAmountClick(amount) {
+            const num = typeof amount === 'string' ? parseFloat(amount, 10) : amount;
+            if (isNaN(num) || num <= 0) return;
+            const lim = getTopUpLimits();
+            if (num < lim.min || num > lim.max) {
+                showErrorToast('Сумма от ' + lim.min + ' до ' + lim.max);
+                return;
+            }
             if (selectedTopUpMethod === 'platega') {
-                requestPlategaPay(amount);
+                requestPlategaPay(num);
+            } else if (selectedTopUpMethod === 'crypto') {
+                requestCryptoPay(num);
             } else {
-                requestInvoiceAndPay(amount);
+                requestInvoiceAndPay(Math.round(num));
             }
         }
 
@@ -1280,6 +1352,19 @@
                     updateTopUpHint();
                 });
             });
+            var submitBtn = document.getElementById('topup-submit-btn');
+            var customInput = document.getElementById('topup-custom-amount');
+            if (submitBtn && customInput) {
+                submitBtn.addEventListener('click', function() {
+                    var raw = customInput.value.trim().replace(',', '.');
+                    var amount = raw ? parseFloat(raw, 10) : NaN;
+                    if (isNaN(amount) || amount <= 0) {
+                        showErrorToast('Введите сумму');
+                        return;
+                    }
+                    onTopUpAmountClick(amount);
+                });
+            }
         });
 
         async function loadSettings() {
@@ -1306,6 +1391,12 @@
                         priceEl.textContent = `${prices[modelId]} монет/фото`;
                     }
                 });
+                var supportLink = document.getElementById('support-link');
+                if (supportLink && data.supportUsername) {
+                    var u = data.supportUsername.replace(/^@/, '');
+                    supportLink.href = 'https://t.me/' + u;
+                    supportLink.textContent = '@' + u;
+                }
             } catch (e) { showErrorToast('Не удалось загрузить настройки'); }
         }
 

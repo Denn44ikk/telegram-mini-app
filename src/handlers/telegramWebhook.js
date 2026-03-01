@@ -1,4 +1,4 @@
-const { initDb, getOrCreateUser, getUserByTelegramId, acceptTerms, deleteUserByTelegramId, deleteUserByUsername, deleteAllUsersExcept, adjustUserBalance } = require('../../db');
+const { initDb, getOrCreateUser, getUserByTelegramId, getUserByUsername, acceptTerms, deleteUserByTelegramId, deleteUserByUsername, deleteAllUsersExcept, adjustUserBalance } = require('../../db');
 const { debugLog } = require('../utils/logger');
 const { sendText, sendTextWithKeyboard, answerCallbackQuery, answerPreCheckoutQuery } = require('../services/telegram');
 
@@ -55,6 +55,31 @@ async function handleKickCommand(text, senderTelegramId) {
         return ok ? `✅ Пользователь @${target} удалён.` : `❌ Пользователь @${target} не найден.`;
     } catch (e) {
         debugLog('KICK COMMAND ERROR', e.message);
+        return '❌ Ошибка: ' + e.message;
+    }
+}
+
+/** Команда для админа den_bessonovv: пополнение баланса пользователя без оплаты. /balance username сумма */
+async function handleBalanceCommand(text, senderTelegramId) {
+    const parts = text.trim().split(/\s+/);
+    if (parts.length < 3) {
+        return 'Использование: /balance <username> <сумма>\nПример: /balance ivanov 100';
+    }
+    const username = parts[1].replace(/^@/, '').trim();
+    const amount = parseInt(parts[2], 10);
+    if (!username || isNaN(amount) || amount <= 0) {
+        return 'Укажите username (без @) и целую положительную сумму.';
+    }
+    try {
+        await initDb();
+        const user = await getUserByUsername(username);
+        if (!user) {
+            return `❌ Пользователь @${username} не найден.`;
+        }
+        await adjustUserBalance(user.telegram_user_id, amount);
+        return `✅ Баланс пользователя @${username} пополнен на ${amount} BNB. Текущий баланс: ${(user.balance || 0) + amount} BNB.`;
+    } catch (e) {
+        debugLog('BALANCE COMMAND ERROR', e.message);
         return '❌ Ошибка: ' + e.message;
     }
 }
@@ -179,6 +204,9 @@ async function handleTelegramWebhook(req, res) {
                 await sendText(chatId, getSupportText());
             } else if (isKickAllowed(user) && (text.toLowerCase().startsWith('/kick ') || text.toLowerCase() === '/kick')) {
                 const reply = await handleKickCommand(text, String(user.id));
+                await sendText(chatId, reply);
+            } else if (isKickAllowed(user) && (text.toLowerCase().startsWith('/balance ') || text.toLowerCase() === '/balance')) {
+                const reply = await handleBalanceCommand(text, String(user.id));
                 await sendText(chatId, reply);
             } else if (text.trim()) {
                 debugLog('TELEGRAM MESSAGE', { chatId, userId: user.id, text: text.substring(0, 50) });

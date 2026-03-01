@@ -79,7 +79,12 @@ router.get('/telegram-webhook', (req, res) => {
 router.post('/telegram-webhook', telegramWebhookGuard, handleTelegramWebhook);
 
 router.get('/settings', (req, res) => {
-    res.json({ modelId: getModelId(), availableModels: getAvailableModels() });
+    const supportContact = (process.env.SUPPORT_CONTACT || '@proverkadopakk').trim().replace(/^@/, '');
+    res.json({
+        modelId: getModelId(),
+        availableModels: getAvailableModels(),
+        supportUsername: supportContact
+    });
 });
 
 router.put('/settings', (req, res) => {
@@ -416,14 +421,22 @@ router.get('/payment/limits', (req, res) => {
     res.json({
         minAmount: MIN_AMOUNT,
         maxAmount: MAX_AMOUNT,
+        starsMin: STARS_MIN,
+        starsMax: STARS_MAX,
+        plategaMin: PLATEGA_AMOUNT_MIN,
+        plategaMax: PLATEGA_AMOUNT_MAX,
+        cryptoMin: MIN_AMOUNT,
+        cryptoMax: MAX_AMOUNT,
         supportedMethods: ['sbp', 'crypto', 'telegram_stars'],
         supportedCrypto: ['USDT', 'BTC', 'ETH']
     });
 });
 
-// Лимиты для Telegram Stars (в звёздах). 1 Star = 1 BNB на балансе.
+// Лимиты для Telegram Stars (в звёздах). Курс: звёзды → BNB на балансе (1 звезда ≠ 1 рубль).
 const STARS_MIN = 10;
 const STARS_MAX = 10000;
+// Сколько BNB на балансе начислять за 1 звезду (например 0.01 = 100 звёзд → 1 BNB)
+const STARS_TO_BNB_RATE = parseFloat(process.env.STARS_TO_BNB_RATE || '0.01', 10) || 0.01;
 
 /**
  * Создать ссылку на счёт Telegram (Stars или провайдер) для пополнения баланса.
@@ -452,9 +465,10 @@ router.post('/payment/invoice-link', async (req, res) => {
         const providerToken = process.env.PAYMENT_PROVIDER_TOKEN || '';
         const isStars = !providerToken || providerToken.trim() === '';
         const currency = isStars ? 'XTR' : (process.env.PAYMENT_CURRENCY || 'RUB');
+        const amountBnb = Math.max(1, Math.round(amountNum * STARS_TO_BNB_RATE));
         const payload = JSON.stringify({
             telegram_user_id: user.telegram_user_id,
-            amount_bnb: amountNum
+            amount_bnb: amountBnb
         });
         if (Buffer.byteLength(payload, 'utf8') > 128) {
             return res.status(400).json({ error: 'Payload слишком длинный' });
@@ -462,7 +476,7 @@ router.post('/payment/invoice-link', async (req, res) => {
 
         const invoiceLink = await createInvoiceLink({
             title: 'Пополнение баланса',
-            description: `Пополнение на ${amountNum} BNB (PromoShoot Coins)`,
+            description: `Пополнение: ${amountNum} звёзд → ${amountBnb} BNB (PromoShoot Coins)`,
             payload,
             providerToken: isStars ? '' : providerToken,
             currency,

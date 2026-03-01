@@ -272,6 +272,21 @@ async function getUserByTelegramId(telegramUserId) {
     }
 }
 
+/** Получить пользователя по username (без @) */
+async function getUserByUsername(username) {
+    try {
+        const name = String(username).replace(/^@/, '').trim().toLowerCase();
+        const db = await initDb();
+        const [rows] = await db.execute('SELECT * FROM users WHERE LOWER(username) = ?', [name]);
+        const user = rows[0] || null;
+        dbLog('GET_USER_BY_USERNAME', { username: name, found: !!user });
+        return user;
+    } catch (error) {
+        dbLog('GET_USER_BY_USERNAME ERROR', { error: error.message });
+        throw error;
+    }
+}
+
 async function getBalance(telegramUserId) {
     try {
         dbLog('GET_BALANCE', { telegramUserId });
@@ -517,6 +532,7 @@ module.exports = {
     initDb,
     getOrCreateUser,
     getUserByTelegramId,
+    getUserByUsername,
     getBalance,
     getReferralStats,
     listUsersWithRefs,
