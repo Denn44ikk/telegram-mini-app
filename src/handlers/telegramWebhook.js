@@ -86,7 +86,6 @@ async function handleBalanceCommand(text, senderTelegramId) {
 
 async function handleTelegramWebhook(req, res) {
     try {
-        console.log('\n🔔 WEBHOOK RECEIVED - RAW BODY:', JSON.stringify(req.body, null, 2));
         const update = req.body;
 
         if (!update) {

@@ -6,13 +6,6 @@ const { debugLog } = require('../utils/logger');
 const { adminGuard } = require('../middleware/adminGuard');
 const { telegramWebhookGuard } = require('../middleware/telegramWebhookGuard');
 const { handleTelegramWebhook } = require('../handlers/telegramWebhook');
-const {
-    createSBPPayment,
-    createCryptoPayment,
-    verifyPayment,
-    MIN_AMOUNT,
-    MAX_AMOUNT
-} = require('../services/payment');
 const { createInvoiceLink } = require('../services/telegram');
 const { createPlategaPayment } = require('../services/platega');
 const {
@@ -261,184 +254,6 @@ router.post('/send-file', async (req, res) => { res.json({ success: false }); })
 
 // ========== ПЛАТЕЖНАЯ СИСТЕМА ==========
 
-/**
- * Создание платежа через СБП
- * POST /api/payment/sbp
- * Body: { initData, amount }
- */
-router.post('/payment/sbp', async (req, res) => {
-    try {
-        const { initData, amount } = req.body || {};
-        const amountNum = parseFloat(amount);
-
-        if (!initData) {
-            return res.status(400).json({ error: 'Нужен initData' });
-        }
-
-        if (!amount || isNaN(amountNum) || amountNum < MIN_AMOUNT || amountNum > MAX_AMOUNT) {
-            return res.status(400).json({ 
-                error: `Сумма должна быть от ${MIN_AMOUNT} до ${MAX_AMOUNT} рублей` 
-            });
-        }
-
-        const user = await getOrCreateUser(initData, null);
-        if (!user) {
-            return res.status(400).json({ error: 'Не удалось распарсить пользователя из initData' });
-        }
-
-        const result = await createSBPPayment(user.telegram_user_id, amountNum);
-        
-        if (!result.success) {
-            return res.status(400).json({ error: result.error });
-        }
-
-        debugLog('API PAYMENT SBP', {
-            userId: user.telegram_user_id,
-            amount: amountNum,
-            paymentId: result.payment.paymentId
-        });
-
-        res.json(result);
-    } catch (e) {
-        debugLog('API PAYMENT SBP ERROR', e.message);
-        res.status(500).json({ error: 'Ошибка создания платежа СБП', details: e.message });
-    }
-});
-
-/**
- * Создание платежа через криптовалюту
- * POST /api/payment/crypto
- * Body: { initData, amount, cryptoType }
- */
-router.post('/payment/crypto', async (req, res) => {
-    try {
-        const { initData, amount, cryptoType = 'USDT' } = req.body || {};
-        const amountNum = parseFloat(amount);
-
-        if (!initData) {
-            return res.status(400).json({ error: 'Нужен initData' });
-        }
-
-        if (!amount || isNaN(amountNum) || amountNum < MIN_AMOUNT || amountNum > MAX_AMOUNT) {
-            return res.status(400).json({ 
-                error: `Сумма должна быть от ${MIN_AMOUNT} до ${MAX_AMOUNT} рублей` 
-            });
-        }
-
-        const user = await getOrCreateUser(initData, null);
-        if (!user) {
-            return res.status(400).json({ error: 'Не удалось распарсить пользователя из initData' });
-        }
-
-        const result = await createCryptoPayment(user.telegram_user_id, amountNum, cryptoType);
-        
-        if (!result.success) {
-            return res.status(400).json({ error: result.error });
-        }
-
-        debugLog('API PAYMENT CRYPTO', {
-            userId: user.telegram_user_id,
-            amount: amountNum,
-            cryptoType,
-            paymentId: result.payment.paymentId
-        });
-
-        res.json(result);
-    } catch (e) {
-        debugLog('API PAYMENT CRYPTO ERROR', e.message);
-        res.status(500).json({ error: 'Ошибка создания криптоплатежа', details: e.message });
-    }
-});
-
-/**
- * Проверка статуса платежа
- * GET /api/payment/verify?paymentId=...&initData=...
- */
-router.get('/payment/verify', async (req, res) => {
-    try {
-        const { paymentId, initData } = req.query;
-
-        if (!paymentId || !initData) {
-            return res.status(400).json({ error: 'Нужны paymentId и initData' });
-        }
-
-        const user = await getOrCreateUser(initData, null);
-        if (!user) {
-            return res.status(400).json({ error: 'Не удалось распарсить пользователя из initData' });
-        }
-
-        const result = await verifyPayment(paymentId, user.telegram_user_id);
-        
-        debugLog('API PAYMENT VERIFY', {
-            userId: user.telegram_user_id,
-            paymentId,
-            success: result.success
-        });
-
-        res.json(result);
-    } catch (e) {
-        debugLog('API PAYMENT VERIFY ERROR', e.message);
-        res.status(500).json({ error: 'Ошибка проверки платежа', details: e.message });
-    }
-});
-
-/**
- * История пополнений пользователя (из platega_payments)
- * GET /api/payment/history?initData=...
- */
-router.get('/payment/history', async (req, res) => {
-    try {
-        const { initData } = req.query;
-
-        if (!initData) {
-            return res.status(400).json({ error: 'Нужен initData' });
-        }
-
-        const user = await getOrCreateUser(initData, null);
-        if (!user) {
-            return res.status(400).json({ error: 'Не удалось распарсить пользователя из initData' });
-        }
-
-        const payments = await getPlategaPaymentsByUser(user.telegram_user_id);
-
-        debugLog('API PAYMENT HISTORY', {
-            userId: user.telegram_user_id,
-            paymentsCount: payments.length
-        });
-
-        res.json({ success: true, payments });
-    } catch (e) {
-        debugLog('API PAYMENT HISTORY ERROR', e.message);
-        res.status(500).json({ error: 'Ошибка получения истории платежей', details: e.message });
-    }
-});
-
-/**
- * Получение лимитов и настроек платежей
- * GET /api/payment/limits
- */
-router.get('/payment/limits', (req, res) => {
-    const sbpPhone = process.env.SBP_PHONE || null;
-    const sbpAccount = process.env.SBP_ACCOUNT || null;
-    const cryptoUsdtWallet = process.env.CRYPTO_USDT_WALLET || null;
-
-    res.json({
-        minAmount: MIN_AMOUNT,
-        maxAmount: MAX_AMOUNT,
-        starsMin: STARS_MIN,
-        starsMax: STARS_MAX,
-        plategaMin: PLATEGA_AMOUNT_MIN,
-        plategaMax: PLATEGA_AMOUNT_MAX,
-        cryptoMin: MIN_AMOUNT,
-        cryptoMax: MAX_AMOUNT,
-        supportedMethods: ['sbp', 'crypto', 'telegram_stars'],
-        supportedCrypto: ['USDT', 'BTC', 'ETH'],
-        sbpPhone,
-        sbpAccount,
-        cryptoUsdtWallet
-    });
-});
-
 // Лимиты для Telegram Stars (в звёздах). Курс: звёзды → BNB на балансе (1 звезда ≠ 1 рубль).
 const STARS_MIN = 10;
 const STARS_MAX = 10000;
@@ -508,18 +323,30 @@ router.post('/payment/invoice-link', async (req, res) => {
     }
 });
 
-// ========== Platega (СБП и др.) ==========
+// ========== Platega (СБП / эквайринг / крипто) ==========
 const PLATEGA_AMOUNT_MIN = 10;
 const PLATEGA_AMOUNT_MAX = 50000;
 
+const PLATEGA_METHOD_SBP = parseInt(process.env.PLATEGA_METHOD_SBP || '2', 10);
+const PLATEGA_METHOD_CARD = parseInt(process.env.PLATEGA_METHOD_CARD || '1', 10);
+const PLATEGA_METHOD_CRYPTO = parseInt(process.env.PLATEGA_METHOD_CRYPTO || '3', 10);
+
+function resolvePlategaPaymentMethod(methodKey) {
+    const key = String(methodKey || 'sbp').toLowerCase();
+    if (key === 'card') return PLATEGA_METHOD_CARD;
+    if (key === 'crypto') return PLATEGA_METHOD_CRYPTO;
+    return PLATEGA_METHOD_SBP;
+}
+
 /**
- * Создать платёж через Platega (СБП).
+ * Создать платёж через Platega (СБП / эквайринг / крипто).
  * POST /api/payment/platega-create
- * Body: { initData, amount } — amount в рублях (можно с копейками, например 100.5)
+ * Body: { initData, amount, method } — amount в рублях (можно с копейками, например 100.5),
+ * method: 'sbp' | 'card' | 'crypto' (по умолчанию 'sbp')
  */
 router.post('/payment/platega-create', async (req, res) => {
     try {
-        const { initData, amount } = req.body || {};
+        const { initData, amount, method } = req.body || {};
         const amountRub = parseFloat(String(amount).replace(',', '.'));
 
         if (!initData) {
@@ -541,6 +368,9 @@ router.post('/payment/platega-create', async (req, res) => {
         const failedUrl = baseUrl ? `${baseUrl}/pay-fail` : returnUrl;
         const amountBnb = Math.round(amountRub);
 
+        const methodKey = (method || 'sbp').toString().toLowerCase();
+        const paymentMethod = resolvePlategaPaymentMethod(methodKey);
+
         const result = await createPlategaPayment({
             amount: amountRub,
             currency: 'RUB',
@@ -548,7 +378,7 @@ router.post('/payment/platega-create', async (req, res) => {
             returnUrl,
             failedUrl,
             payload: JSON.stringify({ telegram_user_id: user.telegram_user_id, amount_bnb: amountBnb }),
-            paymentMethod: parseInt(process.env.PLATEGA_PAYMENT_METHOD || '2', 10)
+            paymentMethod
         });
 
         if (!result.success) {
@@ -561,6 +391,8 @@ router.post('/payment/platega-create', async (req, res) => {
         debugLog('API PAYMENT PLATEGA CREATE', {
             userId: user.telegram_user_id,
             amountRub,
+            method: methodKey,
+            paymentMethod,
             transactionId: result.transactionId
         });
 
@@ -625,6 +457,21 @@ router.post('/payment/platega-callback', async (req, res) => {
 router.get('/payment/platega-enabled', (req, res) => {
     const enabled = !!(process.env.PLATEGA_MERCHANT_ID && process.env.PLATEGA_SECRET);
     res.json({ enabled });
+});
+
+/**
+ * Получение лимитов и настроек платежей
+ * GET /api/payment/limits
+ * Оставляем только Telegram Stars и Platega.
+ */
+router.get('/payment/limits', (req, res) => {
+    res.json({
+        starsMin: STARS_MIN,
+        starsMax: STARS_MAX,
+        plategaMin: PLATEGA_AMOUNT_MIN,
+        plategaMax: PLATEGA_AMOUNT_MAX,
+        supportedMethods: ['telegram_stars', 'platega']
+    });
 });
 
 module.exports = { apiRouter: router };

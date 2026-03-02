@@ -421,9 +421,9 @@
         }
         .topup-amount-btn:active { opacity: 0.9; }
         .topup-custom-trigger-btn { display: none; }
-        .topup-method-row { display: flex; gap: 10px; margin-bottom: 16px; }
+        .topup-method-row { display: flex; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
         .topup-method-btn {
-            flex: 1;
+            flex: 1 1 0;
             padding: 12px;
             font-size: 14px;
             color: #fff;
@@ -1015,15 +1015,16 @@
         </div>
     </div>
 
-    <!-- Модальное окно: способ оплаты (Stars + Platega) и сумма -->
+    <!-- Модальное окно: способы оплаты (Platega: 3 варианта + Stars) и сумма -->
     <div id="topup-modal" class="topup-overlay" style="display: none;">
         <div class="topup-modal">
             <h3>Пополнение баланса</h3>
             <div id="topup-method-row" class="topup-method-row" style="display: none;">
-                <button type="button" class="topup-method-btn" id="topup-method-stars" data-method="stars">⭐ Stars</button>
-                <button type="button" class="topup-method-btn" id="topup-method-platega" data-method="platega">💳 СБП (Platega)</button>
-                <button type="button" class="topup-method-btn" id="topup-method-crypto" data-method="crypto">₿ Крипто</button>
+                <button type="button" class="topup-method-btn" id="topup-method-sbp" data-method="platega_sbp">СБП (QR-код)</button>
+                <button type="button" class="topup-method-btn" id="topup-method-card" data-method="platega_card">Картой</button>
+                <button type="button" class="topup-method-btn" id="topup-method-crypto" data-method="platega_crypto">Криптовалюта</button>
             </div>
+            <button type="button" class="topup-method-btn" id="topup-method-stars" data-method="stars" style="width: 100%; margin-bottom: 8px;">⭐ Пополнить через Telegram Stars</button>
             <p class="topup-hint" id="topup-hint">Выберите сумму или введите свою.</p>
             <div class="topup-amounts">
                 <button type="button" class="topup-amount-btn" data-amount="50">50</button>
@@ -1251,17 +1252,15 @@
         }
 
         let plategaEnabled = false;
-        let selectedTopUpMethod = 'stars';
+        let selectedTopUpMethod = 'platega_sbp';
 
-        let paymentLimits = { starsMin: 10, starsMax: 10000, plategaMin: 10, plategaMax: 50000, cryptoMin: 100, cryptoMax: 50000 };
+        let paymentLimits = { starsMin: 10, starsMax: 10000, plategaMin: 10, plategaMax: 50000 };
 
         function updateTopUpHint() {
             const hintEl = document.getElementById('topup-hint');
             if (!hintEl) return;
-            if (selectedTopUpMethod === 'platega') {
+            if (selectedTopUpMethod.startsWith('platega')) {
                 hintEl.textContent = 'Сумма в рублях (₽), от ' + paymentLimits.plategaMin + ' до ' + paymentLimits.plategaMax + '.';
-            } else if (selectedTopUpMethod === 'crypto') {
-                hintEl.textContent = 'Сумма в рублях (₽), от ' + paymentLimits.cryptoMin + ' до ' + paymentLimits.cryptoMax + '. USDT/BTC/ETH.';
             } else {
                 hintEl.textContent = 'Сумма в звёздах, от ' + paymentLimits.starsMin + ' до ' + paymentLimits.starsMax + '. Курс: звёзды → BNB на балансе.';
             }
@@ -1283,12 +1282,10 @@
                 if (limitsData.starsMax != null) paymentLimits.starsMax = limitsData.starsMax;
                 if (limitsData.plategaMin != null) paymentLimits.plategaMin = limitsData.plategaMin;
                 if (limitsData.plategaMax != null) paymentLimits.plategaMax = limitsData.plategaMax;
-                if (limitsData.cryptoMin != null) paymentLimits.cryptoMin = limitsData.cryptoMin;
-                if (limitsData.cryptoMax != null) paymentLimits.cryptoMax = limitsData.cryptoMax;
                 const plategaData = await plategaRes.json();
                 plategaEnabled = !!plategaData.enabled;
-                selectedTopUpMethod = 'stars';
-                if (methodRow) methodRow.style.display = 'flex';
+                selectedTopUpMethod = plategaEnabled ? 'platega_sbp' : 'stars';
+                if (methodRow) methodRow.style.display = plategaEnabled ? 'flex' : 'none';
                 document.querySelectorAll('.topup-method-btn').forEach(function(btn) {
                     btn.classList.toggle('active', btn.dataset.method === selectedTopUpMethod);
                 });
@@ -1306,10 +1303,14 @@
         async function requestPlategaPay(amount) {
             hideTopUpModal();
             try {
+                let method = 'sbp';
+                if (selectedTopUpMethod === 'platega_card') method = 'card';
+                else if (selectedTopUpMethod === 'platega_crypto') method = 'crypto';
+
                 const res = await fetch('/api/payment/platega-create', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ initData: tg.initData || '', amount: amount })
+                    body: JSON.stringify({ initData: tg.initData || '', amount: amount, method })
                 });
                 const data = await res.json();
                 if (data.error) {
@@ -1365,34 +1366,8 @@
             }
         }
 
-        async function requestCryptoPay(amountRub) {
-            hideTopUpModal();
-            try {
-                const res = await fetch('/api/payment/crypto', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ initData: tg.initData || '', amount: amountRub, cryptoType: 'USDT' })
-                });
-                const data = await res.json();
-                if (data.error) {
-                    showErrorToast(data.error);
-                    return;
-                }
-                const p = data.payment || data;
-                const wallet = (p.cryptoData && p.cryptoData.walletAddress) || p.walletAddress || '';
-                const amountCrypto = (p.cryptoData && p.cryptoData.amountCrypto) || p.amountCrypto || '';
-                const msg = 'Переведите ' + amountCrypto + ' USDT (TRC20) на адрес:\n' + wallet + '\n\nПосле оплаты баланс пополнится после проверки.';
-                if (tg.showAlert) tg.showAlert(msg);
-                else showErrorToast(msg);
-            } catch (e) {
-                uiLog('requestCryptoPay:error', { message: e.message });
-                showErrorToast('Ошибка при создании криптоплатежа');
-            }
-        }
-
         function getTopUpLimits() {
-            if (selectedTopUpMethod === 'platega') return { min: paymentLimits.plategaMin, max: paymentLimits.plategaMax };
-            if (selectedTopUpMethod === 'crypto') return { min: paymentLimits.cryptoMin, max: paymentLimits.cryptoMax };
+            if (selectedTopUpMethod.startsWith('platega')) return { min: paymentLimits.plategaMin, max: paymentLimits.plategaMax };
             return { min: paymentLimits.starsMin, max: paymentLimits.starsMax };
         }
 
@@ -1404,10 +1379,8 @@
                 showErrorToast('Сумма от ' + lim.min + ' до ' + lim.max);
                 return;
             }
-            if (selectedTopUpMethod === 'platega') {
+            if (selectedTopUpMethod.startsWith('platega')) {
                 requestPlategaPay(num);
-            } else if (selectedTopUpMethod === 'crypto') {
-                requestCryptoPay(num);
             } else {
                 requestInvoiceAndPay(Math.round(num));
             }
@@ -1422,7 +1395,10 @@
             });
             document.querySelectorAll('.topup-method-btn').forEach(function(btn) {
                 btn.addEventListener('click', function() {
-                    selectedTopUpMethod = btn.dataset.method || 'stars';
+                    const method = btn.dataset.method || 'stars';
+                    // Если Platega отключена, не даём выбирать её методы
+                    if (!plategaEnabled && method.startsWith('platega')) return;
+                    selectedTopUpMethod = method;
                     document.querySelectorAll('.topup-method-btn').forEach(function(b) {
                         b.classList.toggle('active', b.dataset.method === selectedTopUpMethod);
                     });

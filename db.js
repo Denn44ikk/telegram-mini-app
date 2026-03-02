@@ -2,7 +2,10 @@ const mysql = require('mysql2/promise');
 
 let pool;
 
+const ENABLE_DB_LOG = (process.env.DB_DEBUG_LOG || '1') !== '0';
+
 function dbLog(operation, data) {
+    if (!ENABLE_DB_LOG) return;
     const time = new Date().toLocaleTimeString('ru-RU');
     console.log(`\n🗄️  [${time}] DB ${operation}`);
     if (data !== undefined) {
