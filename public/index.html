@@ -637,7 +637,7 @@
             font-size: 16px;
         }
 
-        /* Ошибки — красивый тост внизу экрана */
+        /* Тост внизу экрана (ошибки / информация) */
         .error-toast {
             position: fixed;
             left: 50%;
@@ -650,11 +650,8 @@
             display: flex;
             align-items: flex-start;
             gap: 12px;
-            background: radial-gradient(circle at top left, rgba(248,113,113,.28), rgba(15,23,42,.95));
             border-radius: 16px;
-            border: 1px solid rgba(248,113,113,.6);
             box-shadow: 0 18px 60px rgba(0,0,0,.7);
-            color: #fee2e2;
             backdrop-filter: blur(18px);
             -webkit-backdrop-filter: blur(18px);
             opacity: 0;
@@ -674,10 +671,8 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: rgba(248,113,113,.25);
-            color: #fecaca;
             flex-shrink: 0;
-            box-shadow: 0 0 16px rgba(248,113,113,.45);
+            box-shadow: 0 0 16px rgba(15,23,42,.45);
         }
         .error-toast-body {
             flex: 1;
@@ -687,11 +682,11 @@
             font-size: 14px;
             font-weight: 600;
             margin-bottom: 2px;
-            color: #fee2e2;
+            color: inherit;
         }
         .error-toast-message {
             font-size: 13px;
-            color: #fecaca;
+            color: inherit;
             line-height: 1.4;
             word-wrap: break-word;
             word-break: break-word;
@@ -699,7 +694,7 @@
         .error-toast-close {
             border: none;
             background: transparent;
-            color: #fecaca;
+            color: inherit;
             cursor: pointer;
             font-size: 16px;
             padding: 2px 0 0 8px;
@@ -708,6 +703,26 @@
         }
         .error-toast-close:hover {
             opacity: 1;
+        }
+        /* Состояние ошибки (красное) */
+        .error-toast.error {
+            background: radial-gradient(circle at top left, rgba(248,113,113,.28), rgba(15,23,42,.95));
+            border: 1px solid rgba(248,113,113,.6);
+            color: #fee2e2;
+        }
+        .error-toast.error .error-toast-icon {
+            background: rgba(248,113,113,.25);
+            color: #fecaca;
+        }
+        /* Состояние информации (синее) */
+        .error-toast.info {
+            background: radial-gradient(circle at top left, rgba(59,130,246,.32), rgba(15,23,42,.96));
+            border: 1px solid rgba(59,130,246,.7);
+            color: #dbeafe;
+        }
+        .error-toast.info .error-toast-icon {
+            background: rgba(59,130,246,.25);
+            color: #bfdbfe;
         }
 
         @media (max-width: 480px) {
@@ -1092,12 +1107,12 @@
                 <button type="button" class="main-btn purple-glow" id="terms-accept-btn" disabled>Принять</button>
             </div>
         </div>
-        <div id="error-toast" class="error-toast">
+        <div id="error-toast" class="error-toast error">
             <div class="error-toast-icon">
                 <i class="fa-solid fa-triangle-exclamation"></i>
             </div>
             <div class="error-toast-body">
-                <div class="error-toast-title">Ошибка</div>
+                <div class="error-toast-title" id="error-toast-title">Ошибка</div>
                 <div id="error-toast-message" class="error-toast-message"></div>
             </div>
             <button type="button" class="error-toast-close" onclick="hideErrorToast()">
@@ -1117,11 +1132,15 @@
             uiLog('uiError', { message });
             const toast = document.getElementById('error-toast');
             const msgEl = document.getElementById('error-toast-message');
+            const titleEl = document.getElementById('error-toast-title');
             if (!toast || !msgEl) {
                 // fallback на стандартное окно Telegram
                 if (tg && tg.showAlert) tg.showAlert(message);
                 return;
             }
+            toast.classList.remove('info');
+            toast.classList.add('error');
+            if (titleEl) titleEl.textContent = 'Ошибка';
             msgEl.textContent = message || 'Произошла ошибка';
             toast.classList.add('visible');
             if (window.__errorToastTimer) clearTimeout(window.__errorToastTimer);
@@ -1134,12 +1153,16 @@
             uiLog('uiInfo', { message });
             const toast = document.getElementById('error-toast');
             const msgEl = document.getElementById('error-toast-message');
+            const titleEl = document.getElementById('error-toast-title');
             if (!toast || !msgEl) {
                 if (tg && tg.showAlert) tg.showAlert(message);
                 return;
             }
-            toast.classList.add('visible');
+            toast.classList.remove('error');
+            toast.classList.add('info');
+            if (titleEl) titleEl.textContent = 'Информация';
             msgEl.textContent = message || '';
+            toast.classList.add('visible');
             if (window.__errorToastTimer) clearTimeout(window.__errorToastTimer);
             window.__errorToastTimer = setTimeout(() => {
                 toast.classList.remove('visible');
