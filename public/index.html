@@ -723,6 +723,20 @@
         .topup-submit-btn {
             margin-top: 6px;
             width: 100%;
+            padding: 16px;
+            font-size: 18px;
+            font-weight: 600;
+            color: #fff;
+            background: rgba(139,92,246,.25);
+            border: 1px solid rgba(139,92,246,.5);
+            border-radius: 16px;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(139,92,246,.35);
+        }
+        .topup-submit-btn:active {
+            opacity: 0.9;
+            transform: translateY(1px);
+            box-shadow: 0 2px 14px rgba(139,92,246,.25);
         }
         /* Убираем стрелочки у поля суммы в модалке */
         .topup-custom-row input::-webkit-outer-spin-button,
@@ -1011,7 +1025,7 @@
             </div>
             <div class="topup-custom-row">
                 <input type="number" id="topup-custom-amount" placeholder="Своя сумма" min="1" step="1" inputmode="numeric">
-                <button type="button" class="topup-submit-btn main-btn purple-glow" id="topup-submit-btn">Пополнить</button>
+                <button type="button" class="topup-submit-btn" id="topup-submit-btn">Пополнить</button>
             </div>
             <button type="button" class="topup-close" onclick="hideTopUpModal()">Отмена</button>
         </div>
