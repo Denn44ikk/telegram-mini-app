@@ -205,15 +205,13 @@ async function handleTelegramWebhook(req, res) {
             } else if (isKickAllowed(user) && (text.toLowerCase().startsWith('/kick ') || text.toLowerCase() === '/kick')) {
                 const reply = await handleKickCommand(text, String(user.id));
                 await sendText(chatId, reply);
-            } else if (
-                isKickAllowed(user) &&
-                (
-                    text.toLowerCase().startsWith('/balance ') ||
-                    text.toLowerCase() === '/balance'
-                )
-            ) {
-                const reply = await handleBalanceCommand(text, String(user.id));
-                await sendText(chatId, reply);
+            } else if (text.toLowerCase().startsWith('/balance ') || text.toLowerCase() === '/balance') {
+                if (!isKickAllowed(user)) {
+                    await sendText(chatId, '❌ Команда /balance доступна только администратору.');
+                } else {
+                    const reply = await handleBalanceCommand(text, String(user.id));
+                    await sendText(chatId, reply);
+                }
             } else if (text.trim()) {
                 debugLog('TELEGRAM MESSAGE', { chatId, userId: user.id, text: text.substring(0, 50) });
                 await sendText(chatId, OPEN_APP_TEXT);
