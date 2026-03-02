@@ -408,7 +408,7 @@
         }
         .topup-modal h3 { margin: 0 0 8px; font-size: 20px; color: #fff; }
         .topup-hint { color: var(--hint-color); font-size: 13px; margin-bottom: 20px; }
-        .topup-amounts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+        .topup-amounts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
         .topup-amount-btn {
             padding: 16px;
             font-size: 18px;
@@ -420,19 +420,7 @@
             cursor: pointer;
         }
         .topup-amount-btn:active { opacity: 0.9; }
-        .topup-custom-trigger-btn {
-            grid-column: span 2;
-            padding: 16px;
-            font-size: 16px;
-            font-weight: 600;
-            color: #fff;
-            background: rgba(139,92,246,.25);
-            border: 1px solid rgba(139,92,246,.5);
-            border-radius: 12px;
-            cursor: pointer;
-            box-shadow: 0 4px 20px rgba(139,92,246,.35);
-        }
-        .topup-custom-trigger-btn:active { opacity: 0.9; transform: translateY(1px); box-shadow: 0 2px 14px rgba(139,92,246,.25); }
+        .topup-custom-trigger-btn { display: none; }
         .topup-method-row { display: flex; gap: 10px; margin-bottom: 16px; }
         .topup-method-btn {
             flex: 1;
@@ -710,7 +698,7 @@
             }
         }
         .topup-custom-row {
-            margin-top: 16px;
+            margin-top: 8px;
             display: flex;
             flex-direction: column;
             gap: 10px;
@@ -735,6 +723,15 @@
         .topup-submit-btn {
             margin-top: 6px;
             width: 100%;
+        }
+        /* Убираем стрелочки у поля суммы в модалке */
+        .topup-custom-row input::-webkit-outer-spin-button,
+        .topup-custom-row input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .topup-custom-row input[type="number"] {
+            -moz-appearance: textfield;
         }
     </style>
 </head>
@@ -1011,7 +1008,6 @@
                 <button type="button" class="topup-amount-btn" data-amount="100">100</button>
                 <button type="button" class="topup-amount-btn" data-amount="200">200</button>
                 <button type="button" class="topup-amount-btn" data-amount="500">500</button>
-                <button type="button" class="topup-custom-trigger-btn" id="topup-custom-open">Своя сумма</button>
             </div>
             <div class="topup-custom-row">
                 <input type="number" id="topup-custom-amount" placeholder="Своя сумма" min="1" step="1" inputmode="numeric">
@@ -1402,15 +1398,6 @@
                         return;
                     }
                     onTopUpAmountClick(amount);
-                });
-            }
-            var customOpenBtn = document.getElementById('topup-custom-open');
-            if (customOpenBtn && customInput) {
-                customOpenBtn.addEventListener('click', function() {
-                    customInput.focus();
-                    try {
-                        customInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    } catch (e) {}
                 });
             }
         });
