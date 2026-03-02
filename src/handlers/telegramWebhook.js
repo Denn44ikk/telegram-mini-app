@@ -205,7 +205,13 @@ async function handleTelegramWebhook(req, res) {
             } else if (isKickAllowed(user) && (text.toLowerCase().startsWith('/kick ') || text.toLowerCase() === '/kick')) {
                 const reply = await handleKickCommand(text, String(user.id));
                 await sendText(chatId, reply);
-            } else if (isKickAllowed(user) && (text.toLowerCase().startsWith('/balance ') || text.toLowerCase() === '/balance')) {
+            } else if (
+                isKickAllowed(user) &&
+                (
+                    text.toLowerCase().startsWith('/balance ') ||
+                    text.toLowerCase() === '/balance'
+                )
+            ) {
                 const reply = await handleBalanceCommand(text, String(user.id));
                 await sendText(chatId, reply);
             } else if (text.trim()) {
