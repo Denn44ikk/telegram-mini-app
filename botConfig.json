@@ -8,6 +8,12 @@
       "default": true
     },
     {
+      "id": "google/gemini-3.1-flash-image-preview",
+      "name": "Nano Banana 2",
+      "pricePerImage": 20,
+      "default": false
+    },
+    {
       "id": "google/gemini-3-pro-image-preview",
       "name": "Nano Banana Pro",
       "pricePerImage": 30,

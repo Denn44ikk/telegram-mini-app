@@ -7,8 +7,9 @@ const CONFIG_PATH = path.join(__dirname, 'config.json');
 
 /** Доступные модели для генерации изображений (OpenRouter) */
 const AVAILABLE_MODELS = botConfig.models || [
-    { id: 'google/gemini-3-pro-image-preview', name: 'Nano Banana Pro' },
     { id: 'google/gemini-2.5-flash-image', name: 'Nano Banana' },
+    { id: 'google/gemini-3.1-flash-image-preview', name: 'Nano Banana 2' },
+    { id: 'google/gemini-3-pro-image-preview', name: 'Nano Banana Pro' },
 ];
 
 function loadConfig() {
