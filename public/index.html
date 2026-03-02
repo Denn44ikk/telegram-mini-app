@@ -1054,10 +1054,8 @@
             <h3>Пополнение баланса</h3>
             <div id="topup-method-row" class="topup-method-row" style="display: none;">
                 <button type="button" class="topup-method-btn" id="topup-method-sbp" data-method="platega_sbp">СБП</button>
-                <button type="button" class="topup-method-btn" id="topup-method-card" data-method="platega_card">Картой</button>
-                <button type="button" class="topup-method-btn" id="topup-method-crypto" data-method="platega_crypto">Криптовалюта</button>
             </div>
-            <button type="button" class="topup-method-btn" id="topup-method-stars" data-method="stars" style="width: 100%; margin-bottom: 8px;">⭐ Пополнить через Telegram Stars</button>
+            <button type="button" class="topup-method-btn" id="topup-method-stars" data-method="stars" style="width: 100%; margin-bottom: 8px;">⭐ Telegram Stars</button>
             <p class="topup-hint" id="topup-hint">Выберите сумму или введите свою.</p>
             <div class="topup-amounts">
                 <button type="button" class="topup-amount-btn" data-amount="50">50</button>
@@ -1126,6 +1124,22 @@
             }
             msgEl.textContent = message || 'Произошла ошибка';
             toast.classList.add('visible');
+            if (window.__errorToastTimer) clearTimeout(window.__errorToastTimer);
+            window.__errorToastTimer = setTimeout(() => {
+                toast.classList.remove('visible');
+            }, 5000);
+        }
+
+        function showInfoToast(message) {
+            uiLog('uiInfo', { message });
+            const toast = document.getElementById('error-toast');
+            const msgEl = document.getElementById('error-toast-message');
+            if (!toast || !msgEl) {
+                if (tg && tg.showAlert) tg.showAlert(message);
+                return;
+            }
+            toast.classList.add('visible');
+            msgEl.textContent = message || '';
             if (window.__errorToastTimer) clearTimeout(window.__errorToastTimer);
             window.__errorToastTimer = setTimeout(() => {
                 toast.classList.remove('visible');
@@ -1336,9 +1350,7 @@
         async function requestPlategaPay(amount) {
             hideTopUpModal();
             try {
-                let method = 'sbp';
-                if (selectedTopUpMethod === 'platega_card') method = 'card';
-                else if (selectedTopUpMethod === 'platega_crypto') method = 'crypto';
+                const method = 'sbp';
 
                 const res = await fetch('/api/payment/platega-create', {
                     method: 'POST',
@@ -1359,7 +1371,7 @@
                 } else {
                     window.open(data.redirect, '_blank');
                 }
-                if (tg.showAlert) tg.showAlert('После оплаты баланс пополнится автоматически. Вернитесь в приложение.');
+                showInfoToast('После оплаты баланс пополнится автоматически. Просто вернитесь в приложение.');
             } catch (e) {
                 uiLog('requestPlategaPay:error', { message: e.message });
                 showErrorToast('Ошибка при создании платежа');
