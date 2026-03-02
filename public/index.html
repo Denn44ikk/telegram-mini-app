@@ -421,16 +421,18 @@
         }
         .topup-amount-btn:active { opacity: 0.9; }
         .topup-custom-trigger-btn {
-            padding: 14px;
-            font-size: 14px;
-            font-weight: 500;
+            grid-column: span 2;
+            padding: 16px;
+            font-size: 16px;
+            font-weight: 600;
             color: #fff;
-            background: rgba(255,255,255,.08);
-            border: 1px dashed rgba(255,255,255,.3);
+            background: rgba(139,92,246,.25);
+            border: 1px solid rgba(139,92,246,.5);
             border-radius: 12px;
             cursor: pointer;
+            box-shadow: 0 4px 20px rgba(139,92,246,.35);
         }
-        .topup-custom-trigger-btn:active { opacity: 0.9; }
+        .topup-custom-trigger-btn:active { opacity: 0.9; transform: translateY(1px); box-shadow: 0 2px 14px rgba(139,92,246,.25); }
         .topup-method-row { display: flex; gap: 10px; margin-bottom: 16px; }
         .topup-method-btn {
             flex: 1;
@@ -443,7 +445,7 @@
             cursor: pointer;
         }
         .topup-method-btn.active { background: rgba(139,92,246,.35); border-color: rgba(139,92,246,.6); }
-        .topup-close { width: 100%; padding: 12px; background: transparent; border: 1px solid rgba(255,255,255,.2); border-radius: 10px; color: var(--hint-color); cursor: pointer; font-size: 14px; }
+        .topup-close { width: 100%; padding: 12px; background: transparent; border: 1px solid rgba(255,255,255,.2); border-radius: 10px; color: var(--hint-color); cursor: pointer; font-size: 14px; margin-top: 12px; }
 
         .history-list-wrap { padding: 16px; }
         .history-msg { text-align: center; color: var(--hint-color); padding: 24px; font-size: 14px; }
@@ -707,9 +709,33 @@
                 color: #f0f0f0 !important;
             }
         }
-        .topup-custom-row { margin-top: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-        .topup-custom-row input { width: 100px; padding: 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,.2); background: var(--secondary-bg); color: var(--text-color); font-size: 16px; }
-        .topup-submit-btn { margin-top: 12px; width: 100%; padding: 14px; border-radius: 16px; background: var(--button-color); color: var(--button-text); font-size: 16px; font-weight: 600; border: none; cursor: pointer; }
+        .topup-custom-row {
+            margin-top: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            flex-wrap: nowrap;
+        }
+        .topup-custom-row input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 14px 16px;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,.22);
+            background: rgba(255,255,255,.06);
+            color: var(--text-color);
+            font-size: 16px;
+            box-shadow: 0 3px 18px rgba(0,0,0,.35);
+        }
+        .topup-custom-row input:focus {
+            outline: none;
+            border-color: rgba(139,92,246,.7);
+            box-shadow: 0 0 0 2px rgba(139,92,246,.45);
+        }
+        .topup-submit-btn {
+            margin-top: 6px;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
@@ -951,7 +977,8 @@
         <div id="ref-info" style="text-align: center; color: var(--hint-color); margin-top: 12px; font-size: 13px;">
             Реферальная программа скоро будет доступна.
         </div>
-        <button class="main-btn" style="margin-bottom: 10px;" onclick="showTopUpModal()">Пополнить</button>
+        <div id="topup-info" style="text-align: center; color: var(--hint-color); margin-top: 16px; font-size: 12px;"></div>
+        <button class="main-btn" style="margin-top: 22px; margin-bottom: 10px;" onclick="showTopUpModal()">Пополнить</button>
         <button class="main-btn" style="background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2);" onclick="navTo('history-screen')">История пополнений</button>
     </div>
 
@@ -988,7 +1015,7 @@
             </div>
             <div class="topup-custom-row">
                 <input type="number" id="topup-custom-amount" placeholder="Своя сумма" min="1" step="1" inputmode="numeric">
-                <button type="button" class="topup-submit-btn" id="topup-submit-btn">Пополнить</button>
+                <button type="button" class="topup-submit-btn main-btn purple-glow" id="topup-submit-btn">Пополнить</button>
             </div>
             <button type="button" class="topup-close" onclick="hideTopUpModal()">Отмена</button>
         </div>
@@ -1465,6 +1492,30 @@
                 const refInfo = document.getElementById('ref-info');
                 if (refInfo && data.refCode) {
                     refInfo.innerHTML = `Ваш реферальный код: <b>${data.refCode}</b><br>Приглашено друзей: <b>${data.referredCount}</b>`;
+                }
+                const topupInfoEl = document.getElementById('topup-info');
+                if (topupInfoEl) {
+                    try {
+                        const limitsRes = await fetch('/api/payment/limits');
+                        const limits = await limitsRes.json();
+                        const parts = [];
+                        if (limits.sbpPhone || limits.sbpAccount) {
+                            const phone = limits.sbpPhone ? `телефон ${limits.sbpPhone}` : '';
+                            const acc = limits.sbpAccount ? `счёт ${limits.sbpAccount}` : '';
+                            const joined = [phone, acc].filter(Boolean).join(', ');
+                            if (joined) parts.push(`СБП: ${joined}`);
+                        }
+                        if (limits.cryptoUsdtWallet) {
+                            parts.push(`USDT (крипто): ${limits.cryptoUsdtWallet}`);
+                        }
+                        if (parts.length) {
+                            topupInfoEl.textContent = `Реквизиты для пополнения: ${parts.join(' • ')}`;
+                        } else {
+                            topupInfoEl.textContent = '';
+                        }
+                    } catch (_) {
+                        topupInfoEl.textContent = '';
+                    }
                 }
             } catch (e) {
                 uiLog('loadBalance:error', { message: e.message });

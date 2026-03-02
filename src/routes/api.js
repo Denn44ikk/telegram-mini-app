@@ -418,6 +418,10 @@ router.get('/payment/history', async (req, res) => {
  * GET /api/payment/limits
  */
 router.get('/payment/limits', (req, res) => {
+    const sbpPhone = process.env.SBP_PHONE || null;
+    const sbpAccount = process.env.SBP_ACCOUNT || null;
+    const cryptoUsdtWallet = process.env.CRYPTO_USDT_WALLET || null;
+
     res.json({
         minAmount: MIN_AMOUNT,
         maxAmount: MAX_AMOUNT,
@@ -428,7 +432,10 @@ router.get('/payment/limits', (req, res) => {
         cryptoMin: MIN_AMOUNT,
         cryptoMax: MAX_AMOUNT,
         supportedMethods: ['sbp', 'crypto', 'telegram_stars'],
-        supportedCrypto: ['USDT', 'BTC', 'ETH']
+        supportedCrypto: ['USDT', 'BTC', 'ETH'],
+        sbpPhone,
+        sbpAccount,
+        cryptoUsdtWallet
     });
 });
 
