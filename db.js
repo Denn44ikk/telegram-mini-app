@@ -474,6 +474,10 @@ async function getPlategaPaymentByTransactionId(transactionId) {
 async function getPlategaPaymentsByUser(telegramUserId) {
     try {
         const db = await initDb();
+        // Чистим старые "висящие" платежи, чтобы не мешались в списке
+        await db.execute(
+            "DELETE FROM platega_payments WHERE status = 'PENDING' AND created_at < (NOW() - INTERVAL 30 MINUTE)"
+        );
         const [rows] = await db.execute(
             'SELECT transaction_id, amount_rub, amount_bnb, status, created_at FROM platega_payments WHERE telegram_user_id = ? ORDER BY created_at DESC LIMIT 100',
             [String(telegramUserId)]
