@@ -1,6 +1,6 @@
-const { initDb, getOrCreateUser, getUserByTelegramId, getUserByUsername, acceptTerms, deleteUserByTelegramId, deleteUserByUsername, deleteAllUsersExcept, adjustUserBalance } = require('../../db');
+const { initDb, getOrCreateUser, getUserByTelegramId, getUserByUsername, acceptTerms, deleteUserByTelegramId, deleteUserByUsername, deleteAllUsersExcept, adjustUserBalance, getReferralStats } = require('../../db');
 const { debugLog } = require('../utils/logger');
-const { sendText, sendTextWithKeyboard, answerCallbackQuery, answerPreCheckoutQuery } = require('../services/telegram');
+const { sendText, sendTextWithKeyboard, sendTextWithReplyKeyboard, answerCallbackQuery, answerPreCheckoutQuery } = require('../services/telegram');
 
 const TERMS_TEXT = `📜 Пользовательское соглашение и Политика конфиденциальности
 
@@ -199,9 +199,42 @@ async function handleTelegramWebhook(req, res) {
                 } else {
                     await sendText(chatId, WELCOME_TEXT(user.first_name));
                     await sendText(chatId, OPEN_APP_TEXT);
+                    // Показываем пользователю удобные кнопки «Информация» и «Реферальная программа»
+                    await sendTextWithReplyKeyboard(
+                        chatId,
+                        'Вы можете воспользоваться быстрыми кнопками ниже:',
+                        [
+                            [{ text: 'Информация' }, { text: 'Реферальная программа' }]
+                        ]
+                    );
                 }
-            } else if (text === '/info') {
+            } else if (text === '/info' || text === 'Информация') {
                 await sendText(chatId, getSupportText());
+            } else if (text === 'Реферальная программа') {
+                try {
+                    await initDb();
+                    const existing = await getUserByTelegramId(String(user.id));
+                    const userId = existing ? existing.telegram_user_id : String(user.id);
+                    const ref = await getReferralStats(userId);
+                    const botUsername = (process.env.BOT_USERNAME || '').replace(/^@/, '');
+                    const refLink = botUsername && ref.refCode
+                        ? `https://t.me/${botUsername}?start=${encodeURIComponent(ref.refCode)}`
+                        : null;
+                    const supportContact = process.env.SUPPORT_CONTACT || '@proverkadopakk';
+                    let msg = '🎁 Реферальная программа\n\n';
+                    if (refLink) {
+                        msg += `Ваша персональная ссылка для приглашений:\n${refLink}\n\n`;
+                    }
+                    if (ref.refCode) {
+                        msg += `Ваш реферальный код: ${ref.refCode}\nПриглашено друзей: ${ref.referredCount}\n\n`;
+                    }
+                    msg += 'Если приглашённый пополняет баланс, вы получаете 20% от суммы его пополнений.\n';
+                    msg += `По вопросам сотрудничества и партнёрства пишите в поддержку: ${supportContact}`;
+                    await sendText(chatId, msg);
+                } catch (e) {
+                    debugLog('REFERRAL_PROGRAM_ERROR', e.message);
+                    await sendText(chatId, 'Не удалось получить данные реферальной программы. Попробуйте позже.');
+                }
             } else if (isKickAllowed(user) && (text.toLowerCase().startsWith('/kick ') || text.toLowerCase() === '/kick')) {
                 const reply = await handleKickCommand(text, String(user.id));
                 await sendText(chatId, reply);

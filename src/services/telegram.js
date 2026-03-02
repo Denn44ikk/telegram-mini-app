@@ -69,15 +69,37 @@ async function setBotCommands() {
     try {
         if (!TG_TOKEN) return false;
         await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/setMyCommands`, {
-            commands: [
-                { command: 'start', description: 'Запуск бота' },
-                { command: 'info', description: 'Информация и контакты для вопросов' }
-            ]
+            // Очищаем список команд, чтобы убрать /start и /info из меню
+            commands: []
         });
         debugLog('SET_BOT_COMMANDS', 'ok');
         return true;
     } catch (e) {
         debugLog('SET_BOT_COMMANDS ERROR', e.message);
+        return false;
+    }
+}
+
+/** Отправить сообщение с обычной reply-клавиатурой (кнопки под полем ввода) */
+async function sendTextWithReplyKeyboard(chatId, text, keyboard) {
+    try {
+        if (!TG_TOKEN) {
+            debugLog('SEND_TEXT_REPLY_KB ERROR', 'TELEGRAM_BOT_TOKEN not set in .env');
+            return false;
+        }
+        const response = await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+            chat_id: chatId,
+            text,
+            reply_markup: {
+                keyboard,
+                resize_keyboard: true,
+                one_time_keyboard: false
+            }
+        });
+        debugLog('SEND_TEXT_REPLY_KB SUCCESS', { messageId: response.data?.result?.message_id });
+        return true;
+    } catch (e) {
+        debugLog('SEND_TEXT_REPLY_KB ERROR', { error: e.message, chatId });
         return false;
     }
 }
@@ -229,6 +251,7 @@ async function answerPreCheckoutQuery(preCheckoutQueryId, ok, errorMessage) {
 module.exports = {
     sendText,
     sendTextWithKeyboard,
+    sendTextWithReplyKeyboard,
     answerCallbackQuery,
     answerPreCheckoutQuery,
     setBotCommands,

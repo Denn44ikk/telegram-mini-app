@@ -747,6 +747,15 @@
         .topup-custom-row input[type="number"] {
             -moz-appearance: textfield;
         }
+        /* Убираем стрелочки у количества поз */
+        .poses-count-input::-webkit-outer-spin-button,
+        .poses-count-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .poses-count-input[type="number"] {
+            -moz-appearance: textfield;
+        }
     </style>
 </head>
 <body>
@@ -755,7 +764,7 @@
     <!-- 1. МЕНЮ -->
     <div id="menu-screen" class="screen active">
         <div class="header">
-            <h1 class="title-glow">📷 PromoShoot</h1>
+            <h1 class="title-glow">📸 PromoShoot</h1>
             <p>Creative AI Suite</p>
         </div>
         <div class="menu-grid">
@@ -968,7 +977,7 @@
             <a href="https://telegra.ph/Politika-konfidencialnosti-08-15-17" target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a>
             <a href="https://telegra.ph/Polzovatelskoe-soglashenie-08-15-10" target="_blank" rel="noopener noreferrer">Пользовательское соглашение</a>
             <p style="margin: 0; color: var(--hint-color); font-size: 13px;">
-                По всем возникающим вопросам или проблемам пишите нашей поддержке: <a id="support-link" href="https://t.me/proverkadopakk" target="_blank" rel="noopener noreferrer" style="color: var(--button-color); text-decoration: none;">@proverkadopakk</a>
+                По всем возникающим вопросам или проблемам пишите нашей поддержке: <a id="support-link" href="https://t.me/proverkadopakk" rel="noopener noreferrer" style="color: var(--button-color); text-decoration: none;" onclick="openSupport(event)">@proverkadopakk</a>
             </p>
         </div>
     </div>
@@ -1219,6 +1228,26 @@
             if (screenId === 'settings-screen') loadSettings();
             if (screenId === 'balance-screen') loadBalance();
             if (screenId === 'history-screen') loadPaymentHistory();
+        }
+
+        function openSupport(event) {
+            if (event && typeof event.preventDefault === 'function') {
+                event.preventDefault();
+            }
+            try {
+                const linkEl = document.getElementById('support-link');
+                const href = linkEl ? linkEl.href : null;
+                if (!href) return;
+                if (tg && typeof tg.openTelegramLink === 'function') {
+                    tg.openTelegramLink(href);
+                } else if (tg && typeof tg.openLink === 'function') {
+                    tg.openLink(href);
+                } else {
+                    window.open(href, '_blank');
+                }
+            } catch (e) {
+                uiLog('openSupport:error', { message: e.message });
+            }
         }
 
         let plategaEnabled = false;
