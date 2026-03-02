@@ -420,6 +420,17 @@
             cursor: pointer;
         }
         .topup-amount-btn:active { opacity: 0.9; }
+        .topup-custom-trigger-btn {
+            padding: 14px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #fff;
+            background: rgba(255,255,255,.08);
+            border: 1px dashed rgba(255,255,255,.3);
+            border-radius: 12px;
+            cursor: pointer;
+        }
+        .topup-custom-trigger-btn:active { opacity: 0.9; }
         .topup-method-row { display: flex; gap: 10px; margin-bottom: 16px; }
         .topup-method-btn {
             flex: 1;
@@ -973,6 +984,7 @@
                 <button type="button" class="topup-amount-btn" data-amount="100">100</button>
                 <button type="button" class="topup-amount-btn" data-amount="200">200</button>
                 <button type="button" class="topup-amount-btn" data-amount="500">500</button>
+                <button type="button" class="topup-custom-trigger-btn" id="topup-custom-open">Своя сумма</button>
             </div>
             <div class="topup-custom-row">
                 <input type="number" id="topup-custom-amount" placeholder="Своя сумма" min="1" step="1" inputmode="numeric">
@@ -1363,6 +1375,15 @@
                         return;
                     }
                     onTopUpAmountClick(amount);
+                });
+            }
+            var customOpenBtn = document.getElementById('topup-custom-open');
+            if (customOpenBtn && customInput) {
+                customOpenBtn.addEventListener('click', function() {
+                    customInput.focus();
+                    try {
+                        customInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    } catch (e) {}
                 });
             }
         });
