@@ -397,43 +397,76 @@
         .topup-overlay[style*="display: none"] { display: none !important; }
         .topup-modal {
             width: 100%;
-            max-width: 340px;
-            background: rgba(255,255,255,.08);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255,255,255,.12);
-            border-radius: 16px;
-            padding: 24px;
+            max-width: 360px;
+            background: radial-gradient(circle at top left, rgba(139,92,246,.35), rgba(15,23,42,.96));
+            backdrop-filter: blur(22px);
+            -webkit-backdrop-filter: blur(22px);
+            border: 1px solid rgba(148,163,184,.55);
+            border-radius: 20px;
+            padding: 24px 20px 20px;
             text-align: center;
-            box-shadow: 0 8px 40px rgba(0,0,0,.4);
+            box-shadow: 0 18px 60px rgba(15,23,42,.9);
         }
-        .topup-modal h3 { margin: 0 0 8px; font-size: 20px; color: #fff; }
-        .topup-hint { color: var(--hint-color); font-size: 13px; margin-bottom: 20px; }
+        .topup-modal h3 {
+            margin: 0 0 8px;
+            font-size: 20px;
+            color: #fff;
+            font-weight: 650;
+        }
+        .topup-hint {
+            color: var(--hint-color);
+            font-size: 13px;
+            margin-bottom: 18px;
+        }
         .topup-amounts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
         .topup-amount-btn {
-            padding: 16px;
-            font-size: 18px;
+            padding: 14px 12px;
+            font-size: 17px;
             font-weight: 600;
             color: #fff;
-            background: rgba(139,92,246,.25);
-            border: 1px solid rgba(139,92,246,.5);
-            border-radius: 12px;
+            background: rgba(15,23,42,.8);
+            border: 1px solid rgba(148,163,184,.5);
+            border-radius: 14px;
             cursor: pointer;
+            box-shadow: 0 4px 20px rgba(15,23,42,.8);
+            transition: all .2s ease;
         }
-        .topup-amount-btn:active { opacity: 0.9; }
+        .topup-amount-btn:active {
+            opacity: 0.9;
+            transform: translateY(1px);
+            box-shadow: 0 2px 12px rgba(15,23,42,.8);
+        }
         .topup-custom-trigger-btn { display: none; }
         .topup-method-row { display: flex; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
         .topup-method-btn {
             flex: 1 1 0;
-            padding: 12px;
+            padding: 11px 10px;
             font-size: 14px;
-            color: #fff;
-            background: rgba(255,255,255,.08);
-            border: 1px solid rgba(255,255,255,.2);
-            border-radius: 10px;
+            color: #e5e7eb;
+            background: rgba(15,23,42,.8);
+            border: 1px solid rgba(148,163,184,.6);
+            border-radius: 999px;
             cursor: pointer;
+            transition: all .2s ease;
+            white-space: nowrap;
         }
-        .topup-method-btn.active { background: rgba(139,92,246,.35); border-color: rgba(139,92,246,.6); }
-        .topup-close { width: 100%; padding: 12px; background: transparent; border: 1px solid rgba(255,255,255,.2); border-radius: 10px; color: var(--hint-color); cursor: pointer; font-size: 14px; margin-top: 12px; }
+        .topup-method-btn.active {
+            background: linear-gradient(135deg, rgba(139,92,246,.8), rgba(236,72,153,.7));
+            border-color: rgba(244,244,245,.95);
+            color: #fff;
+            box-shadow: 0 6px 22px rgba(15,23,42,.85);
+        }
+        .topup-close {
+            width: 100%;
+            padding: 12px;
+            background: transparent;
+            border: 1px solid rgba(148,163,184,.6);
+            border-radius: 12px;
+            color: var(--hint-color);
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 12px;
+        }
 
         .history-list-wrap { padding: 16px; }
         .history-msg { text-align: center; color: var(--hint-color); padding: 24px; font-size: 14px; }
@@ -709,11 +742,11 @@
             box-sizing: border-box;
             padding: 14px 16px;
             border-radius: 14px;
-            border: 1px solid rgba(255,255,255,.22);
-            background: rgba(255,255,255,.06);
+            border: 1px solid rgba(148,163,184,.65);
+            background: rgba(15,23,42,.9);
             color: var(--text-color);
             font-size: 16px;
-            box-shadow: 0 3px 18px rgba(0,0,0,.35);
+            box-shadow: 0 3px 18px rgba(15,23,42,.9);
         }
         .topup-custom-row input:focus {
             outline: none;
@@ -1020,7 +1053,7 @@
         <div class="topup-modal">
             <h3>Пополнение баланса</h3>
             <div id="topup-method-row" class="topup-method-row" style="display: none;">
-                <button type="button" class="topup-method-btn" id="topup-method-sbp" data-method="platega_sbp">СБП (QR-код)</button>
+                <button type="button" class="topup-method-btn" id="topup-method-sbp" data-method="platega_sbp">СБП</button>
                 <button type="button" class="topup-method-btn" id="topup-method-card" data-method="platega_card">Картой</button>
                 <button type="button" class="topup-method-btn" id="topup-method-crypto" data-method="platega_crypto">Криптовалюта</button>
             </div>
