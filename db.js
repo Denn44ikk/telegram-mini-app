@@ -71,6 +71,14 @@ async function initDb() {
         `).catch(() => {});
 
         await pool.query(`
+            ALTER TABLE users ADD COLUMN ref_earnings INT DEFAULT 0
+        `).catch(() => {});
+
+        await pool.query(`
+            ALTER TABLE users ADD COLUMN welcome_sent_at DATETIME NULL
+        `).catch(() => {});
+
+        await pool.query(`
             CREATE TABLE IF NOT EXISTS referrals (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 referrer_user_id VARCHAR(64) NOT NULL,
@@ -319,7 +327,8 @@ async function getReferralStats(telegramUserId) {
         const countRow = rows[0] || { cnt: 0 };
         const result = {
             refCode: user.ref_code,
-            referredCount: countRow.cnt || 0
+            referredCount: countRow.cnt || 0,
+            totalEarnings: user.ref_earnings || 0
         };
         dbLog('GET_REFERRAL_STATS', result);
         return result;
@@ -344,6 +353,7 @@ async function listUsersWithRefs() {
                 u.balance,
                 u.ref_code,
                 u.referred_by,
+                u.ref_earnings,
                 u.created_at,
                 u.updated_at,
                 COALESCE(r.cnt, 0) AS referred_count
@@ -535,6 +545,54 @@ async function deleteAllUsersExcept(telegramUserId) {
     }
 }
 
+async function applyReferralReward(telegramUserId, amountBnb) {
+    try {
+        const db = await initDb();
+        const user = await getUserByTelegramId(telegramUserId);
+        if (!user || !user.referred_by) {
+            return null;
+        }
+        const [refRows] = await db.execute('SELECT * FROM users WHERE ref_code = ?', [user.referred_by]);
+        const referrer = refRows[0];
+        if (!referrer) {
+            dbLog('APPLY_REFERRAL_REWARD', { message: 'Referrer not found', referredBy: user.referred_by });
+            return null;
+        }
+        const reward = Math.floor(Number(amountBnb) * 0.2);
+        if (!reward || reward <= 0) {
+            dbLog('APPLY_REFERRAL_REWARD', { message: 'Reward is zero, skip', amountBnb, reward });
+            return null;
+        }
+        await db.execute(
+            'UPDATE users SET balance = balance + ?, ref_earnings = ref_earnings + ? WHERE telegram_user_id = ?',
+            [reward, reward, referrer.telegram_user_id]
+        );
+        dbLog('APPLY_REFERRAL_REWARD', {
+            referrerId: referrer.telegram_user_id,
+            referredId: telegramUserId,
+            baseAmount: amountBnb,
+            reward
+        });
+        return reward;
+    } catch (error) {
+        dbLog('APPLY_REFERRAL_REWARD ERROR', { error: error.message });
+        throw error;
+    }
+}
+
+async function markWelcomeSent(telegramUserId) {
+    try {
+        const db = await initDb();
+        await db.execute(
+            'UPDATE users SET welcome_sent_at = NOW() WHERE telegram_user_id = ? AND welcome_sent_at IS NULL',
+            [String(telegramUserId)]
+        );
+    } catch (error) {
+        dbLog('MARK_WELCOME_SENT ERROR', { error: error.message });
+        throw error;
+    }
+}
+
 module.exports = {
     initDb,
     getOrCreateUser,
@@ -545,10 +603,12 @@ module.exports = {
     listUsersWithRefs,
     setUserBalance,
     adjustUserBalance,
+    applyReferralReward,
     acceptTerms,
     deleteUserByTelegramId,
     deleteUserByUsername,
     deleteAllUsersExcept,
+    markWelcomeSent,
     savePlategaPayment,
     getPlategaPaymentByTransactionId,
     setPlategaPaymentCompleted,

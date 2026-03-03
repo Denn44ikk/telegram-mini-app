@@ -1,6 +1,6 @@
-const { initDb, getOrCreateUser, getUserByTelegramId, getUserByUsername, acceptTerms, deleteUserByTelegramId, deleteUserByUsername, deleteAllUsersExcept, adjustUserBalance, getReferralStats } = require('../../db');
+const { initDb, getOrCreateUser, getUserByTelegramId, getUserByUsername, acceptTerms, deleteUserByTelegramId, deleteUserByUsername, deleteAllUsersExcept, adjustUserBalance, getReferralStats, applyReferralReward, markWelcomeSent, listUsersWithRefs } = require('../../db');
 const { debugLog } = require('../utils/logger');
-const { sendText, sendTextWithKeyboard, sendTextWithReplyKeyboard, answerCallbackQuery, answerPreCheckoutQuery } = require('../services/telegram');
+const { sendText, sendTextWithKeyboard, sendTextWithReplyKeyboard, answerCallbackQuery, answerPreCheckoutQuery, sendOwnerNotification } = require('../services/telegram');
 
 const TERMS_TEXT = `📜 Пользовательское соглашение и Политика конфиденциальности
 
@@ -84,6 +84,45 @@ async function handleBalanceCommand(text, senderTelegramId) {
     }
 }
 
+/** Команда для админа: агрегированная статистика по рефералам. /refs */
+async function handleRefsStatsCommand() {
+    try {
+        await initDb();
+        const users = await listUsersWithRefs();
+        if (!users.length) {
+            return 'Пока нет пользователей в базе.';
+        }
+        const totalUsers = users.length;
+        const withReferrals = users.filter(u => (u.referred_count || 0) > 0);
+        const totalInvited = withReferrals.reduce((sum, u) => sum + (u.referred_count || 0), 0);
+        const totalRefEarnings = users.reduce((sum, u) => sum + (u.ref_earnings || 0), 0);
+
+        // Топ-5 приглашающих по количеству приглашённых
+        const topReferrers = [...withReferrals]
+            .sort((a, b) => (b.referred_count || 0) - (a.referred_count || 0))
+            .slice(0, 5);
+
+        let msg = '📊 Статистика по рефералам\n\n';
+        msg += `Всего пользователей: ${totalUsers}\n`;
+        msg += `Пользователей с рефералами: ${withReferrals.length}\n`;
+        msg += `Всего приглашено друзей: ${totalInvited}\n`;
+        msg += `Суммарный заработок от рефералов: ${totalRefEarnings} BNB\n`;
+
+        if (topReferrers.length) {
+            msg += '\nТоп приглашающих:\n';
+            topReferrers.forEach((u, idx) => {
+                const uname = u.username ? `@${u.username}` : `id=${u.telegram_user_id}`;
+                msg += `${idx + 1}) ${uname}: пригласил ${u.referred_count}, заработал ${u.ref_earnings || 0} BNB\n`;
+            });
+        }
+
+        return msg.trimEnd();
+    } catch (e) {
+        debugLog('REFS_STATS_COMMAND_ERROR', e.message);
+        return '❌ Ошибка при получении статистики: ' + e.message;
+    }
+}
+
 async function handleTelegramWebhook(req, res) {
     try {
         const update = req.body;
@@ -118,6 +157,14 @@ async function handleTelegramWebhook(req, res) {
             }
             await answerPreCheckoutQuery(queryId, ok, errorMessage);
             debugLog('TELEGRAM PRE_CHECKOUT', { queryId, ok });
+            if (!ok) {
+                await sendOwnerNotification(
+                    `⚠️ Ошибка pre_checkout_query\n` +
+                    `query_id=${queryId}\n` +
+                    `payload=${payload?.substring(0, 200) || ''}\n` +
+                    `error="${errorMessage}"`
+                );
+            }
             res.json({ ok: true });
             return;
         }
@@ -142,7 +189,14 @@ async function handleTelegramWebhook(req, res) {
                 try {
                     await initDb();
                     await adjustUserBalance(String(telegramUserId), amountBnb);
+                    await applyReferralReward(String(telegramUserId), amountBnb);
                     debugLog('TELEGRAM SUCCESSFUL_PAYMENT', { telegramUserId, amountBnb, telegramPaymentChargeId });
+                    await sendOwnerNotification(
+                        `✅ Успешная оплата (Telegram Stars)\n` +
+                        `Пользователь: id=${telegramUserId}\n` +
+                        `Сумма: ${amountBnb} BNB\n` +
+                        `charge_id: ${telegramPaymentChargeId}`
+                    );
                 } catch (e) {
                     debugLog('TELEGRAM SUCCESSFUL_PAYMENT BALANCE ERROR', { error: e.message });
                 }
@@ -161,6 +215,7 @@ async function handleTelegramWebhook(req, res) {
                 await answerCallbackQuery(cb.id, 'Спасибо! Соглашение принято.');
                 const ok = await acceptTerms(String(userId));
                 if (ok) {
+                    await markWelcomeSent(String(userId));
                     await sendText(chatId, WELCOME_TEXT(cb.from?.first_name));
                     await sendText(chatId, OPEN_APP_TEXT);
                 }
@@ -179,15 +234,26 @@ async function handleTelegramWebhook(req, res) {
                 debugLog('TELEGRAM /start', { chatId, userId: user.id, startParam });
 
                 let userRow = null;
+                let isNewUser = false;
                 try {
+                    await initDb();
+                    const existing = await getUserByTelegramId(String(user.id));
                     const fakeInitData = startParam
                         ? `user=${encodeURIComponent(JSON.stringify(user))}&start_param=${startParam}`
                         : `user=${encodeURIComponent(JSON.stringify(user))}`;
 
-                    await initDb();
                     userRow = await getOrCreateUser(fakeInitData, chatId);
+                    isNewUser = !existing && !!userRow;
                 } catch (e) {
                     debugLog('TELEGRAM /start DB ERROR', e.message);
+                }
+
+                if (isNewUser) {
+                    await sendOwnerNotification(
+                        `👤 Новый пользователь в боте\n` +
+                        `id=${user.id}${user.username ? ` (@${user.username})` : ''}\n` +
+                        `${user.first_name || ''} ${user.last_name || ''}`.trim()
+                    );
                 }
 
                 const termsAccepted = userRow && userRow.terms_accepted_at;
@@ -196,7 +262,10 @@ async function handleTelegramWebhook(req, res) {
                         [{ text: '✅ Принять пользовательское соглашение и политику конфиденциальности', callback_data: 'terms_accept' }]
                     ]);
                 } else {
-                    await sendText(chatId, WELCOME_TEXT(user.first_name));
+                    if (!userRow.welcome_sent_at) {
+                        await markWelcomeSent(String(user.id));
+                        await sendText(chatId, WELCOME_TEXT(user.first_name));
+                    }
                     await sendText(chatId, OPEN_APP_TEXT);
                     // Показываем пользователю удобные кнопки «Информация» и «Реферальная программа»
                     await sendTextWithReplyKeyboard(
@@ -225,7 +294,9 @@ async function handleTelegramWebhook(req, res) {
                         msg += `Ваша персональная ссылка для приглашений:\n${refLink}\n\n`;
                     }
                     if (ref.refCode) {
-                        msg += `Ваш реферальный код: ${ref.refCode}\nПриглашено друзей: ${ref.referredCount}\n\n`;
+                        msg += `Ваш реферальный код: ${ref.refCode}\n`;
+                        msg += `Приглашено друзей: ${ref.referredCount}\n`;
+                        msg += `Заработано от рефералов: ${ref.totalEarnings || 0} BNB\n\n`;
                     }
                     msg += 'Если приглашённый пополняет баланс, вы получаете 20% от суммы его пополнений.\n';
                     msg += `По вопросам сотрудничества и партнёрства пишите в поддержку: ${supportContact}`;
@@ -244,6 +315,9 @@ async function handleTelegramWebhook(req, res) {
                     const reply = await handleBalanceCommand(text, String(user.id));
                     await sendText(chatId, reply);
                 }
+            } else if (isKickAllowed(user) && (text.toLowerCase() === '/refs' || text.toLowerCase() === '/refstats')) {
+                const reply = await handleRefsStatsCommand();
+                await sendText(chatId, reply);
             } else if (text.trim()) {
                 debugLog('TELEGRAM MESSAGE', { chatId, userId: user.id, text: text.substring(0, 50) });
                 await sendText(chatId, OPEN_APP_TEXT);

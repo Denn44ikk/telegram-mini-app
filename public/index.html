@@ -1008,19 +1008,19 @@
             <div class="mode-toggle" role="group" aria-label="Режим">
                 <button type="button" class="mode-btn" id="mode-nano-1" data-model-id="google/gemini-2.5-flash-image" onclick="setMode('google/gemini-2.5-flash-image')">
                     <span class="mode-btn-content">
-                        <span class="mode-title">Nano Banana</span>
+                        <span class="mode-title">Nano</span>
                         <span class="mode-price" id="mode-nano-1-price"></span>
                     </span>
                 </button>
                 <button type="button" class="mode-btn" id="mode-nano-2" data-model-id="google/gemini-3.1-flash-image-preview" onclick="setMode('google/gemini-3.1-flash-image-preview')">
                     <span class="mode-btn-content">
-                        <span class="mode-title">Nano Banana 2</span>
+                        <span class="mode-title">Nano 2</span>
                         <span class="mode-price" id="mode-nano-2-price"></span>
                     </span>
                 </button>
                 <button type="button" class="mode-btn pro-mode" id="mode-pro" data-model-id="google/gemini-3-pro-image-preview" onclick="setMode('google/gemini-3-pro-image-preview')">
                     <span class="mode-btn-content">
-                        <span class="mode-title">Nano Banana Pro</span>
+                        <span class="mode-title">Nano Pro</span>
                         <span class="mode-price" id="mode-pro-price"></span>
                     </span>
                 </button>
@@ -1570,7 +1570,11 @@
                 if (amountEl) amountEl.textContent = `${data.balance} BNB`;
                 const refInfo = document.getElementById('ref-info');
                 if (refInfo && data.refCode) {
-                    refInfo.innerHTML = `Ваш реферальный код: <b>${data.refCode}</b><br>Приглашено друзей: <b>${data.referredCount}</b>`;
+                    const earnings = typeof data.refTotalEarnings === 'number' ? data.refTotalEarnings : 0;
+                    refInfo.innerHTML =
+                        `Ваш реферальный код: <b>${data.refCode}</b><br>` +
+                        `Приглашено друзей: <b>${data.referredCount}</b><br>` +
+                        `Доход от рефералов: <b>${earnings} BNB</b>`;
                 }
                 const topupInfoEl = document.getElementById('topup-info');
                 if (topupInfoEl) {
@@ -2027,6 +2031,9 @@
                     container.classList.add('has-result');
                     container.querySelector('.placeholder-text').style.display = 'none';
                     tg.HapticFeedback.notificationOccurred('success');
+                    if (data.sentToChat) {
+                        showInfoToast('Готово! Все фото также отправлены в чат с ботом отдельными файлами — вы всегда найдёте их там.');
+                    }
                 } else if (type === 'poses' && data.imageUrls && data.imageUrls.length) {
                     const grid = document.getElementById('poses-images-grid');
                     grid.innerHTML = data.imageUrls.map(url => `<img src="${url}" alt="">`).join('');
@@ -2034,12 +2041,18 @@
                     container.classList.add('has-result');
                     container.querySelector('.placeholder-text').style.display = 'none';
                     tg.HapticFeedback.notificationOccurred('success');
+                    if (data.sentToChat) {
+                        showInfoToast('Готово! Все фото также отправлены в чат с ботом отдельными файлами — вы всегда найдёте их там.');
+                    }
                 } else if ((type === 'text' || type === 'ref') && data.imageUrl) {
                     imgRes.src = data.imageUrl;
                     imgRes.style.display = 'block';
                     container.classList.add('has-result');
                     container.querySelector('.placeholder-text').style.display = 'none';
                     tg.HapticFeedback.notificationOccurred('success');
+                    if (data.sentToChat) {
+                        showInfoToast('Готово! Фото также отправлено в чат с ботом файлом — вы всегда найдёте его там.');
+                    }
                 } else {
                     const msg = data.error || 'Ошибка';
                     if (res.status === 402 && (data.shortfall != null || data.required != null)) {

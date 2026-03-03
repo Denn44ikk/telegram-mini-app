@@ -1,12 +1,25 @@
 const express = require('express');
 const multer = require('multer');
 const { getModelId, setModelId, getAvailableModels } = require('../../prompts');
-const { initDb, getOrCreateUser, getBalance, getReferralStats, listUsersWithRefs, setUserBalance, acceptTerms, savePlategaPayment, getPlategaPaymentByTransactionId, setPlategaPaymentCompleted, adjustUserBalance, getPlategaPaymentsByUser } = require('../../db');
+const {
+    initDb,
+    getOrCreateUser,
+    getBalance,
+    getReferralStats,
+    listUsersWithRefs,
+    setUserBalance,
+    acceptTerms,
+    savePlategaPayment,
+    getPlategaPaymentByTransactionId,
+    setPlategaPaymentCompleted,
+    adjustUserBalance,
+    getPlategaPaymentsByUser
+} = require('../../db');
 const { debugLog } = require('../utils/logger');
 const { adminGuard } = require('../middleware/adminGuard');
 const { telegramWebhookGuard } = require('../middleware/telegramWebhookGuard');
 const { handleTelegramWebhook } = require('../handlers/telegramWebhook');
-const { createInvoiceLink } = require('../services/telegram');
+const { createInvoiceLink, sendOwnerNotification } = require('../services/telegram');
 const { createPlategaPayment } = require('../services/platega');
 const {
     handleGeneration,
@@ -212,11 +225,18 @@ router.get('/balance', async (req, res) => {
         const ref = await getReferralStats(user.telegram_user_id);
         const termsAccepted = !!user.terms_accepted_at;
         const botUsername = process.env.BOT_USERNAME || null;
-        debugLog('API BALANCE', { userId: user.telegram_user_id, balance, refCode: ref.refCode, termsAccepted });
+        debugLog('API BALANCE', {
+            userId: user.telegram_user_id,
+            balance,
+            refCode: ref.refCode,
+            termsAccepted,
+            totalRefEarnings: ref.totalEarnings
+        });
         res.json({
             balance,
             refCode: ref.refCode,
             referredCount: ref.referredCount,
+            refTotalEarnings: ref.totalEarnings,
             termsAccepted,
             botLink: botUsername ? `https://t.me/${botUsername.replace(/^@/, '')}` : null
         });
@@ -316,6 +336,13 @@ router.post('/payment/invoice-link', async (req, res) => {
             currency
         });
 
+        const isStars = currency === 'XTR';
+        const attemptText =
+            `🧾 Попытка оплаты (Telegram ${isStars ? 'Stars' : 'Invoice'})\n` +
+            `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}\n` +
+            `Сумма: ${amountNum} звёзд → ${amountBnb} BNB`;
+        await sendOwnerNotification(attemptText);
+
         res.json({ success: true, invoiceLink });
     } catch (e) {
         debugLog('API PAYMENT INVOICE_LINK ERROR', e.message);
@@ -396,6 +423,13 @@ router.post('/payment/platega-create', async (req, res) => {
             transactionId: result.transactionId
         });
 
+        const attemptText =
+            `🧾 Попытка оплаты (Platega)\n` +
+            `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}\n` +
+            `Сумма: ${amountRub} ₽ → ${amountBnb} BNB\n` +
+            `Транзакция: ${result.transactionId}`;
+        await sendOwnerNotification(attemptText);
+
         res.json({ success: true, redirect: result.redirect, transactionId: result.transactionId });
     } catch (e) {
         debugLog('API PAYMENT PLATEGA CREATE ERROR', e.message);
@@ -443,6 +477,13 @@ router.post('/payment/platega-callback', async (req, res) => {
 
         debugLog('PLATEGA CALLBACK', { transactionId, userId: payment.telegram_user_id, amountBnb: payment.amount_bnb });
 
+        const successText =
+            `✅ Успешная оплата (Platega)\n` +
+            `Пользователь: id=${payment.telegram_user_id}\n` +
+            `Сумма: ${payment.amount_bnb} BNB\n` +
+            `Транзакция: ${transactionId}`;
+        await sendOwnerNotification(successText);
+
         res.status(200).json({ ok: true, message: 'Payment completed' });
     } catch (e) {
         debugLog('PLATEGA CALLBACK ERROR', e.message);
@@ -472,6 +513,28 @@ router.get('/payment/limits', (req, res) => {
         plategaMax: PLATEGA_AMOUNT_MAX,
         supportedMethods: ['telegram_stars', 'platega']
     });
+});
+
+/**
+ * История пополнений пользователя (на данный момент — только Platega).
+ * GET /api/payment/history?initData=...
+ */
+router.get('/payment/history', async (req, res) => {
+    try {
+        const initData = req.query.initData;
+        if (!initData) {
+            return res.status(400).json({ error: 'Нужен initData' });
+        }
+        const user = await getOrCreateUser(initData, null);
+        if (!user) {
+            return res.status(400).json({ error: 'Не удалось распарсить пользователя из initData' });
+        }
+        const payments = await getPlategaPaymentsByUser(user.telegram_user_id);
+        res.json({ payments });
+    } catch (e) {
+        debugLog('API PAYMENT HISTORY ERROR', e.message);
+        res.status(500).json({ error: 'Ошибка чтения истории платежей', details: e.message });
+    }
 });
 
 module.exports = { apiRouter: router };

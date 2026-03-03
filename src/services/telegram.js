@@ -2,8 +2,10 @@ const axios = require('axios');
 const FormData = require('form-data');
 const { debugLog } = require('../utils/logger');
 const { fixBase64 } = require('../utils/telegram');
+const { getUserByUsername } = require('../../db');
 
 const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const OWNER_USERNAME = (process.env.OWNER_USERNAME || 'den_bessonovv').replace(/^@/, '').toLowerCase();
 
 async function sendText(chatId, text) {
     try {
@@ -25,6 +27,22 @@ async function sendText(chatId, text) {
             chatId,
             hasToken: !!TG_TOKEN
         });
+        return false;
+    }
+}
+
+async function sendOwnerNotification(text) {
+    try {
+        const username = OWNER_USERNAME;
+        if (!username) return false;
+        const owner = await getUserByUsername(username);
+        if (!owner || !owner.chat_id) {
+            debugLog('OWNER_NOTIFY', { message: 'owner user not found or no chat_id', username });
+            return false;
+        }
+        return sendText(owner.chat_id, text);
+    } catch (e) {
+        debugLog('OWNER_NOTIFY ERROR', e.message);
         return false;
     }
 }
@@ -257,5 +275,6 @@ module.exports = {
     setBotCommands,
     sendMediaGroupToTelegram,
     sendToTelegram,
-    createInvoiceLink
+    createInvoiceLink,
+    sendOwnerNotification
 };
