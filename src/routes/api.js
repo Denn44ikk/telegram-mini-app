@@ -335,8 +335,6 @@ router.post('/payment/invoice-link', async (req, res) => {
             amount: amountNum,
             currency
         });
-
-        const isStars = currency === 'XTR';
         const attemptText =
             `🧾 Попытка оплаты (Telegram ${isStars ? 'Stars' : 'Invoice'})\n` +
             `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}\n` +
