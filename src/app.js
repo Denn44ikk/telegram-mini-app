@@ -10,7 +10,7 @@ function createApp() {
     const indexPath = path.join(publicPath, 'index.html');
 
     app.use(cors());
-    app.use(bodyParser.json({ limit: '50mb' }));
+    app.use(bodyParser.json({ limit: '100mb' }));
     app.use(express.static(publicPath));
 
     app.use('/api', apiRouter);
