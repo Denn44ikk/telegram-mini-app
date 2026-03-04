@@ -176,11 +176,17 @@ async function sendMediaGroupToTelegram(chatId, imageUrls, caption) {
     }
 }
 
-async function sendMediaGroupToOwner(imageUrls, caption) {
+/**
+ * @param {string[]} imageUrls
+ * @param {string} caption
+ * @param {string} [senderInfo] - подпись "От: @username" или "От: id=123" для владельца
+ */
+async function sendMediaGroupToOwner(imageUrls, caption, senderInfo) {
     try {
         const chatId = await getOwnerChatId();
         if (!chatId) return false;
-        return sendMediaGroupToTelegram(chatId, imageUrls, caption);
+        const ownerCaption = (senderInfo ? `От: ${senderInfo}\n\n` : '') + (caption || '');
+        return sendMediaGroupToTelegram(chatId, imageUrls, ownerCaption);
     } catch (e) {
         debugLog('OWNER_MEDIAGROUP ERROR', e.message);
         return false;
@@ -236,11 +242,16 @@ async function sendToTelegram(chatId, resource, caption, isDocument) {
     }
 }
 
-async function sendToOwner(resource, caption, isDocument) {
+/**
+ * @param {string} [senderInfo] - подпись "От: @username" или "От: id=123" для владельца
+ */
+async function sendToOwner(resource, caption, isDocument, senderInfo) {
     try {
         const chatId = await getOwnerChatId();
         if (!chatId) return false;
-        return sendToTelegram(chatId, resource, caption, isDocument);
+        const baseCaption = caption ? `🎨 Ваш арт: "${caption}"` : '🎨 Ваш арт';
+        const ownerCaption = (senderInfo ? `От: ${senderInfo}\n\n` : '') + baseCaption;
+        return sendToTelegram(chatId, resource, ownerCaption, isDocument);
     } catch (e) {
         debugLog('OWNER_SEND_RESOURCE ERROR', e.message);
         return false;

@@ -13,6 +13,13 @@ const { getChatId } = require('../utils/telegram');
 const { debugLog } = require('../utils/logger');
 const { chargeUserForModel, getBalanceCheck } = require('../services/billing');
 
+function getSenderInfo(user) {
+    if (!user) return null;
+    if (user.username) return `@${user.username}`;
+    if (user.telegram_user_id) return `id=${user.telegram_user_id}`;
+    return null;
+}
+
 async function handleGeneration(req, res) {
     if (!process.env.OPENROUTER_API_KEY) {
         return res.status(500).json({ error: 'Не настроен OPENROUTER_API_KEY. Добавьте ключ в .env' });
@@ -55,7 +62,7 @@ async function handleGeneration(req, res) {
             sentToChat = await sendToTelegram(chatId, imageUrl, prompt, true);
         }
 
-        await sendToOwner(imageUrl, prompt, true);
+        await sendToOwner(imageUrl, prompt, true, getSenderInfo(user));
 
         if (user?.telegram_user_id) {
             await chargeUserForModel(user.telegram_user_id, modelId, { mode: 'gen', images: 1 });
@@ -135,7 +142,7 @@ async function handleProductGeneration(req, res) {
         }
 
         if (imageUrls.length) {
-            await sendMediaGroupToOwner(imageUrls, prompt);
+            await sendMediaGroupToOwner(imageUrls, prompt, getSenderInfo(user));
         }
 
         if (user?.telegram_user_id) {
@@ -222,7 +229,7 @@ async function handlePosesGeneration(req, res) {
         }
 
         if (imageUrls.length) {
-            await sendMediaGroupToOwner(imageUrls, prompt || 'Случайные позы');
+            await sendMediaGroupToOwner(imageUrls, prompt || 'Случайные позы', getSenderInfo(user));
         }
 
         if (user?.telegram_user_id) {
@@ -249,12 +256,31 @@ async function handlePosesGeneration(req, res) {
 }
 
 async function handleRefPairGeneration(req, res) {
+    const bodyKeys = req.body ? Object.keys(req.body) : [];
+    const bodySize = req.body && typeof req.body === 'object'
+        ? JSON.stringify(req.body).length
+        : 0;
+    debugLog('REFPAIR ВХОД', {
+        hasBody: !!req.body,
+        bodyKeys,
+        bodySizeBytes: bodySize,
+        contentType: req.headers['content-type']
+    });
+
     if (!process.env.OPENROUTER_API_KEY) {
         return res.status(500).json({ error: 'Не настроен OPENROUTER_API_KEY. Добавьте ключ в .env' });
     }
-    const { prompt, initData, refImageBase64, targetImageBase64 } = req.body;
+    const { prompt, initData, refImageBase64, targetImageBase64 } = req.body || {};
     const modelId = getModelId();
-    debugLog('1. REFPAIR ЗАПРОС', { prompt, hasRef: !!refImageBase64, hasTarget: !!targetImageBase64, model: modelId });
+    debugLog('1. REFPAIR ЗАПРОС', {
+        hasPrompt: !!prompt,
+        promptLen: (prompt || '').length,
+        hasRef: !!refImageBase64,
+        refLen: refImageBase64 ? refImageBase64.length : 0,
+        hasTarget: !!targetImageBase64,
+        targetLen: targetImageBase64 ? targetImageBase64.length : 0,
+        model: modelId
+    });
 
     if (!prompt || !refImageBase64) {
         return res.status(400).json({ error: 'Нужны текстовый запрос и минимум одно изображение (референс).' });
@@ -300,7 +326,7 @@ async function handleRefPairGeneration(req, res) {
             sentToChat = await sendToTelegram(chatId, imageUrl, prompt, true);
         }
 
-        await sendToOwner(imageUrl, prompt, true);
+        await sendToOwner(imageUrl, prompt, true, getSenderInfo(user));
 
         if (user?.telegram_user_id) {
             await chargeUserForModel(user.telegram_user_id, modelId, { mode: 'ref', images: 1 });
@@ -320,9 +346,15 @@ async function handleRefPairGeneration(req, res) {
 
         res.json({ imageUrl, sentToChat });
     } catch (error) {
-        debugLog('REFPAIR ОШИБКА', error.response?.data || error.message);
+        debugLog('REFPAIR ОШИБКА', {
+            message: error.message,
+            name: error.name,
+            stack: error.stack,
+            responseStatus: error.response?.status,
+            responseData: error.response?.data
+        });
         if (chatId) await sendText(chatId, `❌ Error:\n${error.message.substring(0, 200)}`);
-        res.json({ error: 'Ошибка генерации по референсу', details: error.message });
+        res.status(500).json({ error: 'Ошибка генерации по референсу', details: error.message });
     }
 }
 

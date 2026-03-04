@@ -132,7 +132,10 @@ router.post('/generate-image', upload.single('image'), async (req, res) => {
     }
 });
 
-router.post('/generate-refpair', (req, res) => handleRefPairGeneration(req, res));
+router.post('/generate-refpair', (req, res) => {
+    debugLog('REFPAIR ROUTE', { contentLength: req.headers['content-length'], contentType: req.headers['content-type'] });
+    return handleRefPairGeneration(req, res);
+});
 router.post('/product-gen', (req, res) => handleProductGeneration(req, res));
 
 router.post('/product-gen-image', upload.single('image'), async (req, res) => {

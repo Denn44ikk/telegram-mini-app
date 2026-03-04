@@ -2008,17 +2008,33 @@
                 const res = await fetch(apiUrl, fetchOpts);
                 clearTimeout(timeoutId);
                 let data;
+                const text = await res.text();
                 try {
-                    const text = await res.text();
                     data = text ? JSON.parse(text) : {};
-                } catch (_) {
-                    data = { error: res.ok ? 'Ошибка ответа сервера' : `Сервер вернул ошибку (${res.status}). Проверьте: 1) Сервер запущен. 2) OPENROUTER_API_KEY в .env` };
+                } catch (parseErr) {
+                    const snippet = text ? text.substring(0, 400).replace(/\s+/g, ' ') : '(пусто)';
+                    uiLog('runGeneration:parseError', {
+                        type,
+                        status: res.status,
+                        statusText: res.statusText,
+                        responseLength: (text || '').length,
+                        snippet,
+                        parseError: parseErr?.message
+                    });
+                    let userMsg = res.ok
+                        ? 'Ответ сервера не в формате JSON. См. консоль (UI логи).'
+                        : `Сервер вернул ошибку: ${res.status} ${res.statusText}.`;
+                    if (res.status === 413) userMsg = 'Запрос слишком большой (фото в высоком разрешении?). Попробуйте меньшее фото.';
+                    else if (res.status === 502 || res.status === 503) userMsg = 'Сервер временно недоступен. Попробуйте позже.';
+                    else if (res.status >= 500) userMsg = `Ошибка сервера (${res.status}). Подробности в консоли и в логах сервера.`;
+                    data = { error: userMsg };
                 }
                 uiLog('runGeneration:fetchResponse', {
                     type,
                     status: res.status,
                     ok: res.ok,
                     hasError: !!data.error,
+                    errorDetail: data.error || data.details || null,
                     hasImageUrl: !!data.imageUrl,
                     imageUrlsCount: Array.isArray(data.imageUrls) ? data.imageUrls.length : 0
                 });
@@ -2054,7 +2070,8 @@
                         showInfoToast('Готово! Фото также отправлено в чат с ботом файлом — вы всегда найдёте его там.');
                     }
                 } else {
-                    const msg = data.error || 'Ошибка';
+                    let msg = data.error || 'Ошибка';
+                    if (data.details && String(data.details).trim()) msg += '\n' + String(data.details).trim();
                     if (res.status === 402 && (data.shortfall != null || data.required != null)) {
                         showErrorToast(msg);
                         loadBalance();
