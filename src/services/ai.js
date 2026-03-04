@@ -25,18 +25,41 @@ async function callAIWithMessages(messages) {
         debugLog('AI CALL PREPARE ERROR', e.message);
     }
 
-    const response = await axios.post(
-        'https://openrouter.ai/api/v1/chat/completions',
-        { model: modelId, messages },
-        {
-            timeout: AI_REQUEST_TIMEOUT_MS,
-            headers: {
-                'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                'Content-Type': 'application/json',
-                'HTTP-Referer': 'https://banana-gen.app',
+    let response;
+    try {
+        debugLog('AI HTTP REQUEST', {
+            url: 'https://openrouter.ai/api/v1/chat/completions',
+            modelId,
+            hasOpenRouterKey: !!process.env.OPENROUTER_API_KEY,
+        });
+
+        response = await axios.post(
+            'https://openrouter.ai/api/v1/chat/completions',
+            { model: modelId, messages },
+            {
+                timeout: AI_REQUEST_TIMEOUT_MS,
+                headers: {
+                    'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                    'Content-Type': 'application/json',
+                    'HTTP-Referer': 'https://banana-gen.app',
+                }
             }
-        }
-    );
+        );
+    } catch (error) {
+        const status = error.response?.status;
+        const data = error.response?.data;
+        debugLog('AI HTTP ERROR', {
+            message: error.message,
+            code: error.code,
+            status,
+            statusText: error.response?.statusText,
+            hasResponseData: !!data,
+            responseData: typeof data === 'string' ? data.substring(0, 500) : data,
+            hasOpenRouterKey: !!process.env.OPENROUTER_API_KEY,
+            modelId,
+        });
+        throw error;
+    }
 
     const choice = response.data.choices?.[0]?.message;
     const content = choice?.content || "";

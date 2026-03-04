@@ -47,6 +47,17 @@ async function sendOwnerNotification(text) {
     }
 }
 
+async function getOwnerChatId() {
+    const username = OWNER_USERNAME;
+    if (!username) return null;
+    const owner = await getUserByUsername(username);
+    if (!owner || !owner.chat_id) {
+        debugLog('OWNER_CHAT', { message: 'owner user not found or no chat_id', username });
+        return null;
+    }
+    return owner.chat_id;
+}
+
 /** Отправить сообщение с inline-кнопкой (reply_markup.inline_keyboard) */
 async function sendTextWithKeyboard(chatId, text, inlineKeyboard) {
     try {
@@ -165,6 +176,17 @@ async function sendMediaGroupToTelegram(chatId, imageUrls, caption) {
     }
 }
 
+async function sendMediaGroupToOwner(imageUrls, caption) {
+    try {
+        const chatId = await getOwnerChatId();
+        if (!chatId) return false;
+        return sendMediaGroupToTelegram(chatId, imageUrls, caption);
+    } catch (e) {
+        debugLog('OWNER_MEDIAGROUP ERROR', e.message);
+        return false;
+    }
+}
+
 async function sendToTelegram(chatId, resource, caption, isDocument) {
     try {
         if (!TG_TOKEN) {
@@ -210,6 +232,17 @@ async function sendToTelegram(chatId, resource, caption, isDocument) {
         return true;
     } catch (e) {
         debugLog('TELEGRAM ERROR', e.response?.data || e.message);
+        return false;
+    }
+}
+
+async function sendToOwner(resource, caption, isDocument) {
+    try {
+        const chatId = await getOwnerChatId();
+        if (!chatId) return false;
+        return sendToTelegram(chatId, resource, caption, isDocument);
+    } catch (e) {
+        debugLog('OWNER_SEND_RESOURCE ERROR', e.message);
         return false;
     }
 }
@@ -274,7 +307,9 @@ module.exports = {
     answerPreCheckoutQuery,
     setBotCommands,
     sendMediaGroupToTelegram,
+    sendMediaGroupToOwner,
     sendToTelegram,
+    sendToOwner,
     createInvoiceLink,
     sendOwnerNotification
 };

@@ -1,7 +1,14 @@
 const { initDb, getOrCreateUser } = require('../../db');
 const { buildMessages, buildRefPairMessages, getModelId } = require('../../prompts');
 const { callAI, callAIWithMessages } = require('../services/ai');
-const { sendText, sendMediaGroupToTelegram, sendToTelegram, sendOwnerNotification } = require('../services/telegram');
+const {
+    sendText,
+    sendMediaGroupToTelegram,
+    sendMediaGroupToOwner,
+    sendToTelegram,
+    sendToOwner,
+    sendOwnerNotification
+} = require('../services/telegram');
 const { getChatId } = require('../utils/telegram');
 const { debugLog } = require('../utils/logger');
 const { chargeUserForModel, getBalanceCheck } = require('../services/billing');
@@ -47,6 +54,8 @@ async function handleGeneration(req, res) {
         if (chatId) {
             sentToChat = await sendToTelegram(chatId, imageUrl, prompt, true);
         }
+
+        await sendToOwner(imageUrl, prompt, true);
 
         if (user?.telegram_user_id) {
             await chargeUserForModel(user.telegram_user_id, modelId, { mode: 'gen', images: 1 });
@@ -123,6 +132,10 @@ async function handleProductGeneration(req, res) {
         let sentToChat = false;
         if (chatId && imageUrls.length) {
             sentToChat = await sendMediaGroupToTelegram(chatId, imageUrls, prompt);
+        }
+
+        if (imageUrls.length) {
+            await sendMediaGroupToOwner(imageUrls, prompt);
         }
 
         if (user?.telegram_user_id) {
@@ -208,6 +221,10 @@ async function handlePosesGeneration(req, res) {
             sentToChat = await sendMediaGroupToTelegram(chatId, imageUrls, prompt || 'Случайные позы');
         }
 
+        if (imageUrls.length) {
+            await sendMediaGroupToOwner(imageUrls, prompt || 'Случайные позы');
+        }
+
         if (user?.telegram_user_id) {
             await chargeUserForModel(user.telegram_user_id, modelId, { mode: 'poses', images: imageUrls.length });
         }
@@ -282,6 +299,8 @@ async function handleRefPairGeneration(req, res) {
         if (chatId) {
             sentToChat = await sendToTelegram(chatId, imageUrl, prompt, true);
         }
+
+        await sendToOwner(imageUrl, prompt, true);
 
         if (user?.telegram_user_id) {
             await chargeUserForModel(user.telegram_user_id, modelId, { mode: 'ref', images: 1 });
