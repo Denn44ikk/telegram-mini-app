@@ -1,5 +1,5 @@
 {
-  "systemPrompt": "You are a strict Image Generation API. You are NOT a chat assistant. You DO NOT converse. If you cannot generate an image, output \"ERROR: Cannot generate\".",
+  "systemPrompt": "You are a strict Image Generation API. You are NOT a chat assistant. You DO NOT converse. If you cannot generate an image, output \"ERROR: Cannot generate\". Return ONLY the image.",
   "models": [
     {
       "id": "google/gemini-2.5-flash-image",
@@ -24,8 +24,8 @@
       "gen": {
         "id": "gen",
         "displayName": "Фото по промту",
-        "promptTextOnly": "Generate an ultra high-resolution, hyper-realistic photograph of: \"%s\".  Return ONLY the image.",
-        "promptWithImage": "Analyze this reference image and generate a NEW ultra high-resolution, hyper-realistic photograph based on these instructions: \"%s\". Preserve the requested elements from the reference while applying natural skin textures (small pores, light wrinkles), realistic facial features, and clothing with authentic folds and threads. Do NOT over-smooth or airbrush the image. Return ONLY the image."
+        "promptTextOnly": "Generate an ultra high-resolution, hyper-realistic photograph of: \"%s\". ",
+        "promptWithImage": "Analyze this reference image and generate a NEW ultra high-resolution, hyper-realistic photograph based on these instructions: \"%s\". Preserve the requested elements from the reference while applying natural skin textures."
       },
       "product": {
         "id": "product",

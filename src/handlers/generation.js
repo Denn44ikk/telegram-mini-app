@@ -64,7 +64,7 @@ async function handleGeneration(req, res) {
         if (user?.telegram_user_id) {
             const ownerMsg =
                 `🖼 Генерация: текстовый промт\n` +
-                `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}\n` +
+                `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}${user.chat_id ? ` chat_id=${user.chat_id}` : ''}\n` +
                 `Модель: ${modelId}\n` +
                 `Промт: ${String(prompt).substring(0, 500)}\n` +
                 `Результат: ${imageUrl}`;
@@ -145,7 +145,7 @@ async function handleProductGeneration(req, res) {
         if (user?.telegram_user_id) {
             const ownerMsg =
                 `🖼 Генерация: фотосессия продукта (5 фото)\n` +
-                `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}\n` +
+                `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}${user.chat_id ? ` chat_id=${user.chat_id}` : ''}\n` +
                 `Модель: ${modelId}\n` +
                 `Промт: ${String(prompt).substring(0, 500)}\n` +
                 `Фото: ${imageUrls.length} шт.\n` +
@@ -232,7 +232,7 @@ async function handlePosesGeneration(req, res) {
         if (user?.telegram_user_id) {
             const ownerMsg =
                 `🖼 Генерация: позы (${posesCount} запросов)\n` +
-                `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}\n` +
+                `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}${user.chat_id ? ` chat_id=${user.chat_id}` : ''}\n` +
                 `Модель: ${modelId}\n` +
                 `Промт: ${String(prompt || 'Случайные позы').substring(0, 500)}\n` +
                 `Фото: ${imageUrls.length} шт.\n` +
@@ -309,7 +309,7 @@ async function handleRefPairGeneration(req, res) {
         if (user?.telegram_user_id) {
             const ownerMsg =
                 `🖼 Генерация: по референсу\n` +
-                `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}\n` +
+                `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}${user.chat_id ? ` chat_id=${user.chat_id}` : ''}\n` +
                 `Модель: ${modelId}\n` +
                 `Промт: ${String(prompt).substring(0, 500)}\n` +
                 `Есть refImage: ${!!refImageBase64}\n` +
