@@ -271,14 +271,14 @@ async function handleTelegramWebhook(req, res) {
                     await sendTextWithReplyKeyboard(
                         chatId,
                         'Вы можете воспользоваться быстрыми кнопками ниже:',
-                        [
-                            [{ text: 'Информация' }, { text: 'Реферальная программа' }]
-                        ]
+                    [
+                        [{ text: 'ℹ️ Информация' }, { text: '🎁 Реферальная программа' }]
+                    ]
                     );
                 }
-            } else if (text === '/info' || text === 'Информация') {
+            } else if (text === '/info' || text === 'Информация' || text === 'ℹ️ Информация') {
                 await sendText(chatId, getSupportText());
-            } else if (text === 'Реферальная программа') {
+            } else if (text === '/ref' || text === '/referral' || text === 'Реферальная программа' || text === '🎁 Реферальная программа') {
                 try {
                     await initDb();
                     const existing = await getUserByTelegramId(String(user.id));
@@ -320,7 +320,14 @@ async function handleTelegramWebhook(req, res) {
                 await sendText(chatId, reply);
             } else if (text.trim()) {
                 debugLog('TELEGRAM MESSAGE', { chatId, userId: user.id, text: text.substring(0, 50) });
-                await sendText(chatId, OPEN_APP_TEXT);
+                // Отправляем подсказку и снова показываем кнопки «Информация» и «Реферальная программа»
+                await sendTextWithReplyKeyboard(
+                    chatId,
+                    OPEN_APP_TEXT + '\n\nИли нажмите кнопку ниже:',
+                    [
+                        [{ text: 'ℹ️ Информация' }, { text: '🎁 Реферальная программа' }]
+                    ]
+                );
             }
         }
 

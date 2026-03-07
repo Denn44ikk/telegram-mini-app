@@ -98,8 +98,10 @@ async function setBotCommands() {
     try {
         if (!TG_TOKEN) return false;
         await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/setMyCommands`, {
-            // Очищаем список команд, чтобы убрать /start и /info из меню
-            commands: []
+            commands: [
+                { command: 'info', description: 'Информация и поддержка' },
+                { command: 'ref', description: 'Реферальная программа' }
+            ]
         });
         debugLog('SET_BOT_COMMANDS', 'ok');
         return true;
