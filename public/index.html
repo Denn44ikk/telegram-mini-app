@@ -208,16 +208,26 @@
         .photo-insert-row {
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 14px;
+            min-height: 48px;
         }
+        .photo-insert-card.has-photo .photo-insert-row { justify-content: flex-start; }
         .photo-insert-icon-wrap {
             position: relative;
+            width: 0;
+            height: 0;
+            min-width: 0;
+            min-height: 0;
+            overflow: hidden;
+            border-radius: 8px;
+            transition: width .2s, height .2s, min-width .2s, min-height .2s;
+        }
+        .photo-insert-card.has-photo .photo-insert-icon-wrap {
             width: 48px;
             height: 48px;
             min-width: 48px;
             min-height: 48px;
-            border-radius: 8px;
-            overflow: hidden;
         }
         .photo-insert-icon {
             display: none;
@@ -237,7 +247,9 @@
             font-size: 15px;
             font-weight: 500;
             flex: 1;
+            text-align: center;
         }
+        .photo-insert-card.has-photo .photo-insert-label { text-align: left; }
 
         .mini-upload {
             display: block;
@@ -1437,7 +1449,7 @@
             pastedFiles.refStyle = null;
             document.getElementById('ref-style-file').value = '';
             const refStyleWrap = document.getElementById('ref-style-icon-wrap');
-            if (refStyleWrap) refStyleWrap.classList.remove('has-photo');
+            if (refStyleWrap) { refStyleWrap.classList.remove('has-photo'); refStyleWrap.closest('.photo-insert-card')?.classList.remove('has-photo'); }
             document.getElementById('ref-style-preview').src = '';
             document.getElementById('ref-style-text').innerText = 'Загрузить референс (стиль) или Ctrl+V';
             document.getElementById('ref-style-clear').classList.remove('visible');
@@ -1994,21 +2006,23 @@
                 document.getElementById('gen-file').value = '';
                 pastedFiles.gen = null;
                 const genWrap = document.getElementById('gen-icon-wrap');
-                if (genWrap) genWrap.classList.remove('has-photo');
+                if (genWrap) { genWrap.classList.remove('has-photo'); genWrap.closest('.photo-insert-card')?.classList.remove('has-photo'); }
                 document.getElementById('gen-preview').src = '';
                 document.getElementById('gen-file-text').innerText = 'Загрузить или вставить (Ctrl+V)';
                 document.getElementById('gen-clear').classList.remove('visible');
             } else if (id === 'product') {
                 document.getElementById('product-file').value = '';
                 pastedFiles.product = null;
-                document.getElementById('product-icon-wrap').classList.remove('has-photo');
+                const productWrap = document.getElementById('product-icon-wrap');
+                if (productWrap) { productWrap.classList.remove('has-photo'); productWrap.closest('.photo-insert-card')?.classList.remove('has-photo'); }
                 document.getElementById('product-preview').src = '';
                 document.getElementById('product-text').innerText = 'Загрузить или вставить (Ctrl+V)';
                 document.getElementById('product-clear').classList.remove('visible');
             } else if (id === 'poses') {
                 document.getElementById('poses-file').value = '';
                 pastedFiles.poses = null;
-                document.getElementById('poses-icon-wrap').classList.remove('has-photo');
+                const posesWrap = document.getElementById('poses-icon-wrap');
+                if (posesWrap) { posesWrap.classList.remove('has-photo'); posesWrap.closest('.photo-insert-card')?.classList.remove('has-photo'); }
                 document.getElementById('poses-preview').src = '';
                 document.getElementById('poses-text').innerText = 'Загрузите фото человека';
                 document.getElementById('poses-clear').classList.remove('visible');
@@ -2019,7 +2033,8 @@
                 document.querySelectorAll('.ref-template-item').forEach(el => el.classList.remove('selected'));
                 document.getElementById('ref-templates-list-view').style.display = 'block';
                 document.getElementById('ref-template-workspace-view').style.display = 'none';
-                document.getElementById('ref-style-icon-wrap').classList.remove('has-photo');
+                const refStyleWrap = document.getElementById('ref-style-icon-wrap');
+                if (refStyleWrap) { refStyleWrap.classList.remove('has-photo'); refStyleWrap.closest('.photo-insert-card')?.classList.remove('has-photo'); }
                 document.getElementById('ref-style-preview').src = '';
                 document.getElementById('ref-style-text').innerText = 'Загрузить референс (стиль) или Ctrl+V';
                 document.getElementById('ref-style-clear').classList.remove('visible');
@@ -2031,7 +2046,8 @@
             } else if (id === 'ref-target') {
                 document.getElementById('ref-target-file').value = '';
                 pastedFiles.refTarget = null;
-                document.getElementById('ref-target-icon-wrap').classList.remove('has-photo');
+                const refTargetWrap = document.getElementById('ref-target-icon-wrap');
+                if (refTargetWrap) { refTargetWrap.classList.remove('has-photo'); refTargetWrap.closest('.photo-insert-card')?.classList.remove('has-photo'); }
                 document.getElementById('ref-target-preview').src = '';
                 document.getElementById('ref-target-text').innerText = refSourceMode === 'template' ? 'Загрузите ваше фото или Ctrl+V' : 'Загрузить основное фото или Ctrl+V';
                 document.getElementById('ref-target-clear').classList.remove('visible');
@@ -2055,7 +2071,9 @@
                 if (img) {
                     img.src = e.target.result;
                     const wrap = img.closest('.photo-insert-icon-wrap');
+                    const card = wrap && wrap.closest('.photo-insert-card');
                     if (wrap) wrap.classList.add('has-photo');
+                    if (card) card.classList.add('has-photo');
                     const label = document.getElementById(labelIds[typeKey]);
                     if (label) label.innerText = 'Фото принято';
                     const clearBtn = document.getElementById(clearIds[typeKey]);
@@ -2086,7 +2104,9 @@
                     const img = document.getElementById(imgId);
                     img.src = e.target.result;
                     const wrap = img.closest('.photo-insert-icon-wrap');
+                    const card = wrap && wrap.closest('.photo-insert-card');
                     if (wrap) wrap.classList.add('has-photo');
+                    if (card) card.classList.add('has-photo');
                     const labelId = { 'gen-preview': 'gen-file-text', 'product-preview': 'product-text', 'poses-preview': 'poses-text', 'ref-style-preview': 'ref-style-text', 'ref-target-preview': 'ref-target-text' }[imgId];
                     if (labelId) document.getElementById(labelId).innerText = 'Фото принято';
                     const clearId = { 'gen-preview': 'gen-clear', 'product-preview': 'product-clear', 'poses-preview': 'poses-clear', 'ref-style-preview': 'ref-style-clear', 'ref-target-preview': 'ref-target-clear' }[imgId];
