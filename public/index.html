@@ -1545,7 +1545,8 @@
             const list = (refTemplatesList && refTemplatesList.length > 0) ? refTemplatesList : REF_TEMPLATES_FALLBACK;
             list.forEach((t, i) => {
                 const isImage = !!t.image;
-                const imgSrc = isImage ? ('/' + t.image) : ('data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(t.svg))));
+                const imagePath = isImage && !t.image.includes('/') ? 'ref-templates/' + t.image : t.image;
+                const imgSrc = isImage ? ('/' + imagePath) : ('data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(t.svg))));
                 const item = document.createElement('button');
                 item.type = 'button';
                 item.className = 'ref-template-item';
