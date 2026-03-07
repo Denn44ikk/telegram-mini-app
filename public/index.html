@@ -592,6 +592,78 @@
         }
         .settings-saved { color: #22d3ee; font-size: 13px; margin-top: 10px; display: none; }
 
+        /* Фото по референсу: переключатель Свой референс / Шаблон */
+        .ref-source-toggle {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        .ref-source-btn {
+            flex: 1;
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,.2);
+            background: rgba(255,255,255,.06);
+            color: var(--hint-color);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all .2s ease;
+        }
+        .ref-source-btn:hover { border-color: rgba(255,255,255,.3); color: #fff; }
+        .ref-source-btn.active {
+            border-color: rgba(139,92,246,.6);
+            background: linear-gradient(135deg, rgba(139,92,246,.25), rgba(99,102,241,.2));
+            color: #fff;
+        }
+        .ref-source-panel { margin-bottom: 16px; }
+        .ref-templates-title {
+            font-size: 14px;
+            color: var(--hint-color);
+            margin: 0 0 12px;
+        }
+        .ref-templates-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+        .ref-template-item {
+            aspect-ratio: 1;
+            border-radius: 12px;
+            border: 2px solid rgba(255,255,255,.2);
+            background: rgba(255,255,255,.08);
+            cursor: pointer;
+            overflow: hidden;
+            padding: 0;
+            transition: border-color .2s, box-shadow .2s;
+        }
+        .ref-template-item:hover { border-color: rgba(139,92,246,.5); box-shadow: 0 0 16px rgba(139,92,246,.2); }
+        .ref-template-item.selected { border-color: rgba(139,92,246,.8); box-shadow: 0 0 20px rgba(139,92,246,.3); }
+        .ref-template-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .ref-template-chosen {
+            margin-bottom: 12px;
+            padding: 10px 12px;
+            background: rgba(139,92,246,.15);
+            border-radius: 10px;
+            border: 1px solid rgba(139,92,246,.3);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            color: var(--text-color);
+        }
+        .ref-template-chosen-img {
+            width: 48px;
+            height: 48px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+
         /* Выбор количества поз — в стиле приложения */
         .poses-count-card {
             background: rgba(255,255,255,.08);
@@ -920,10 +992,16 @@
             <div style="width: 24px;"></div>
         </div>
 
+        <div class="ref-source-toggle" role="group">
+            <button type="button" class="ref-source-btn active" id="ref-source-own" onclick="setRefSource('own')">Свой референс</button>
+            <button type="button" class="ref-source-btn" id="ref-source-template" onclick="setRefSource('template')">Шаблон</button>
+        </div>
+
         <div class="input-card">
             <textarea id="ref-prompt" placeholder="Опишите, что вы хотите получить..."></textarea>
         </div>
 
+        <div id="ref-own-block" class="ref-source-panel">
         <label class="mini-upload" onclick="setActivePasteTarget('ref-style')">
             <input type="file" id="ref-style-file" accept="image/*" style="display:none" onchange="previewFile('ref-style-file', 'ref-style-preview')">
             <i class="fa-regular fa-image" style="font-size: 18px;"></i>
@@ -943,6 +1021,16 @@
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </label>
+        </div>
+
+        <div id="ref-templates-block" class="ref-source-panel" style="display: none;">
+            <p class="ref-templates-title">Выберите шаблон (пример окна)</p>
+            <div id="ref-template-chosen" class="ref-template-chosen" style="display: none;">
+                <span id="ref-template-chosen-text"></span>
+                <img id="ref-template-chosen-img" class="ref-template-chosen-img" alt="">
+            </div>
+            <div id="ref-templates-grid" class="ref-templates-grid"></div>
+        </div>
 
         <div class="result-placeholder" id="ref-result-area">
             <div class="placeholder-text" style="display:flex; flex-direction:column; align-items:center;">
@@ -1199,8 +1287,67 @@
         }
 
         let pastedFiles = { gen: null, product: null, poses: null, refStyle: null, refTarget: null };
+        let refTemplateBase64 = null;
+        let refSourceMode = 'own';
         let activePasteTarget = null;
         let termsAccepted = true;
+
+        const REF_TEMPLATES = [
+            { name: 'Окно 1', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#87CEEB" stroke="#2a4a6a" stroke-width="3"/><line x1="50" y1="0" x2="50" y2="100" stroke="#2a4a6a" stroke-width="2"/><line x1="0" y1="50" x2="100" y2="50" stroke="#2a4a6a" stroke-width="2"/></svg>' },
+            { name: 'Окно 2', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#B0E0E6" stroke="#3d6b8a" stroke-width="2"/><rect x="5" y="5" width="40" height="40" fill="none" stroke="#3d6b8a" stroke-width="1.5"/><rect x="55" y="5" width="40" height="40" fill="none" stroke="#3d6b8a" stroke-width="1.5"/><rect x="5" y="55" width="40" height="40" fill="none" stroke="#3d6b8a" stroke-width="1.5"/><rect x="55" y="55" width="40" height="40" fill="none" stroke="#3d6b8a" stroke-width="1.5"/></svg>' },
+            { name: 'Окно 3', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#E0F4FF" stroke="#1e3a5f" stroke-width="2"/><line x1="33.33" y1="0" x2="33.33" y2="100" stroke="#1e3a5f" stroke-width="1.5"/><line x1="66.66" y1="0" x2="66.66" y2="100" stroke="#1e3a5f" stroke-width="1.5"/><line x1="0" y1="33.33" x2="100" y2="33.33" stroke="#1e3a5f" stroke-width="1.5"/><line x1="0" y1="66.66" x2="100" y2="66.66" stroke="#1e3a5f" stroke-width="1.5"/></svg>' },
+            { name: 'Окно 4', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#ADD8E6" stroke="#2c5282" stroke-width="2"/><rect x="10" y="10" width="80" height="80" fill="none" stroke="#2c5282" stroke-width="2"/><line x1="50" y1="10" x2="50" y2="90" stroke="#2c5282" stroke-width="1.5"/><line x1="10" y1="50" x2="90" y2="50" stroke="#2c5282" stroke-width="1.5"/></svg>' },
+            { name: 'Окно 5', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#AFEEEE" stroke="#285e61" stroke-width="2"/><line x1="0" y1="0" x2="100" y2="100" stroke="#285e61" stroke-width="1.5"/><line x1="100" y1="0" x2="0" y2="100" stroke="#285e61" stroke-width="1.5"/><circle cx="50" cy="50" r="8" fill="none" stroke="#285e61" stroke-width="1.5"/></svg>' },
+            { name: 'Окно 6', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#B8D4E3" stroke="#1a365d" stroke-width="2"/><rect x="15" y="15" width="32" height="32" fill="none" stroke="#1a365d" stroke-width="1.5"/><rect x="53" y="15" width="32" height="32" fill="none" stroke="#1a365d" stroke-width="1.5"/><rect x="15" y="53" width="32" height="32" fill="none" stroke="#1a365d" stroke-width="1.5"/><rect x="53" y="53" width="32" height="32" fill="none" stroke="#1a365d" stroke-width="1.5"/></svg>' }
+        ];
+
+        function setRefSource(mode) {
+            refSourceMode = mode;
+            document.getElementById('ref-source-own').classList.toggle('active', mode === 'own');
+            document.getElementById('ref-source-template').classList.toggle('active', mode === 'template');
+            document.getElementById('ref-own-block').style.display = mode === 'own' ? 'block' : 'none';
+            document.getElementById('ref-templates-block').style.display = mode === 'template' ? 'block' : 'none';
+            if (mode === 'own') {
+                refTemplateBase64 = null;
+                document.querySelectorAll('.ref-template-item').forEach(el => el.classList.remove('selected'));
+                const chosenEl = document.getElementById('ref-template-chosen');
+                if (chosenEl) chosenEl.style.display = 'none';
+            }
+        }
+
+        function initRefTemplates() {
+            const grid = document.getElementById('ref-templates-grid');
+            if (!grid || grid.children.length) return;
+            REF_TEMPLATES.forEach((t, i) => {
+                const dataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(t.svg)));
+                const item = document.createElement('button');
+                item.type = 'button';
+                item.className = 'ref-template-item';
+                item.title = t.name;
+                item.innerHTML = '<img src="' + dataUrl + '" alt="' + t.name + '">';
+                item.onclick = () => {
+                    refTemplateBase64 = dataUrl;
+                    pastedFiles.refStyle = null;
+                    document.getElementById('ref-style-file').value = '';
+                    document.getElementById('ref-style-preview').src = dataUrl;
+                    document.getElementById('ref-style-preview').style.display = 'block';
+                    document.getElementById('ref-style-text').innerText = 'Шаблон: ' + t.name;
+                    document.getElementById('ref-style-clear').classList.add('visible');
+                    document.querySelectorAll('.ref-template-item').forEach(el => el.classList.remove('selected'));
+                    item.classList.add('selected');
+                    const chosenEl = document.getElementById('ref-template-chosen');
+                    const chosenText = document.getElementById('ref-template-chosen-text');
+                    const chosenImg = document.getElementById('ref-template-chosen-img');
+                    if (chosenEl && chosenText && chosenImg) {
+                        chosenText.textContent = 'Выбран: ' + t.name;
+                        chosenImg.src = dataUrl;
+                        chosenEl.style.display = 'flex';
+                    }
+                    tg.HapticFeedback && tg.HapticFeedback.selectionOccurred();
+                };
+                grid.appendChild(item);
+            });
+        }
         let botLink = null;
 
         function showTermsOverlay(show) {
@@ -1305,6 +1452,7 @@
             if (screenId === 'settings-screen') loadSettings();
             if (screenId === 'balance-screen') loadBalance();
             if (screenId === 'history-screen') loadPaymentHistory();
+            if (screenId === 'ref-screen') initRefTemplates();
         }
 
         function openSupport(event) {
@@ -1686,7 +1834,7 @@
                     handlePastedImage(blob, 'poses');
                 } else if (document.getElementById('ref-screen').classList.contains('active')) {
                     // Если стиль ещё не задан — вставляем туда, иначе в основное фото
-                    const hasStyle = !!pastedFiles.refStyle || !!document.getElementById('ref-style-preview').src;
+                    const hasStyle = !!pastedFiles.refStyle || !!refTemplateBase64 || !!document.getElementById('ref-style-preview').src;
                     const hasTarget = !!pastedFiles.refTarget || !!document.getElementById('ref-target-preview').src;
                     const target = !hasStyle ? 'ref-style' : (!hasTarget ? 'ref-target' : 'ref-style');
                     handlePastedImage(blob, target);
@@ -1725,6 +1873,10 @@
             } else if (id === 'ref-style') {
                 document.getElementById('ref-style-file').value = '';
                 pastedFiles.refStyle = null;
+                refTemplateBase64 = null;
+                document.querySelectorAll('.ref-template-item').forEach(el => el.classList.remove('selected'));
+                const refChosen = document.getElementById('ref-template-chosen');
+                if (refChosen) refChosen.style.display = 'none';
                 document.getElementById('ref-style-preview').style.display = 'none';
                 document.getElementById('ref-style-preview').src = '';
                 document.getElementById('ref-style-text').innerText = 'Загрузить референс (стиль) или Ctrl+V';
@@ -1902,9 +2054,9 @@
                     hasTargetFile: !!targetFile
                 });
 
-                if (!refFile) {
-                    uiLog('runGeneration:ref:abort', { reason: 'no refFile' });
-                    showErrorToast('Нужно хотя бы одно фото‑референс.');
+                if (!refFile && !refTemplateBase64) {
+                    uiLog('runGeneration:ref:abort', { reason: 'no refFile and no template' });
+                    showErrorToast('Нужно хотя бы одно фото‑референс или выберите шаблон.');
                     return;
                 }
                 if (!prompt) {
@@ -1913,7 +2065,7 @@
                     return;
                 }
 
-                const refBase64 = await toBase64(refFile);
+                const refBase64 = refTemplateBase64 || await toBase64(refFile);
                 const refMeta = typeof refBase64 === 'string' ? { length: refBase64.length } : {};
                 uiLog('runGeneration:ref:refBase64Ready', refMeta);
 

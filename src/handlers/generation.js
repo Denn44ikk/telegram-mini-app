@@ -1,4 +1,4 @@
-const { initDb, getOrCreateUser } = require('../../db');
+const { initDb, getOrCreateUser, getUserByUsername } = require('../../db');
 const { buildMessages, buildRefPairMessages, getModelId } = require('../../prompts');
 const { callAI, callAIWithMessages } = require('../services/ai');
 const {
@@ -12,6 +12,21 @@ const {
 const { getChatId } = require('../utils/telegram');
 const { debugLog } = require('../utils/logger');
 const { chargeUserForModel, getBalanceCheck } = require('../services/billing');
+
+const OWNER_USERNAME = (process.env.OWNER_USERNAME || 'den_bessonovv').replace(/^@/, '').toLowerCase();
+
+/** Проверяет, является ли пользователь владельцем (ему не дублируем уведомления и фото в личку). */
+async function isOwner(user) {
+    if (!user) return false;
+    const uname = (user.username || '').trim().toLowerCase().replace(/^@/, '');
+    if (uname === OWNER_USERNAME) return true;
+    try {
+        const owner = await getUserByUsername(OWNER_USERNAME);
+        return !!(owner && owner.telegram_user_id && String(owner.telegram_user_id) === String(user.telegram_user_id));
+    } catch (e) {
+        return false;
+    }
+}
 
 function getSenderInfo(user) {
     if (!user) return null;
@@ -62,20 +77,22 @@ async function handleGeneration(req, res) {
             sentToChat = await sendToTelegram(chatId, imageUrl, prompt, true);
         }
 
-        await sendToOwner(imageUrl, prompt, true, getSenderInfo(user));
-
-        if (user?.telegram_user_id) {
-            await chargeUserForModel(user.telegram_user_id, modelId, { mode: 'gen', images: 1 });
+        const ownerGenerating = await isOwner(user);
+        if (!ownerGenerating) {
+            await sendToOwner(imageUrl, prompt, true, getSenderInfo(user));
+            if (user?.telegram_user_id) {
+                const ownerMsg =
+                    `🖼 Генерация: текстовый промт\n` +
+                    `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}${user.chat_id ? ` chat_id=${user.chat_id}` : ''}\n` +
+                    `Модель: ${modelId}\n` +
+                    `Промт: ${String(prompt).substring(0, 500)}\n` +
+                    `Результат: ${imageUrl}`;
+                await sendOwnerNotification(ownerMsg);
+            }
         }
 
         if (user?.telegram_user_id) {
-            const ownerMsg =
-                `🖼 Генерация: текстовый промт\n` +
-                `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}${user.chat_id ? ` chat_id=${user.chat_id}` : ''}\n` +
-                `Модель: ${modelId}\n` +
-                `Промт: ${String(prompt).substring(0, 500)}\n` +
-                `Результат: ${imageUrl}`;
-            await sendOwnerNotification(ownerMsg);
+            await chargeUserForModel(user.telegram_user_id, modelId, { mode: 'gen', images: 1 });
         }
 
         res.json({ imageUrl, sentToChat });
@@ -141,23 +158,23 @@ async function handleProductGeneration(req, res) {
             sentToChat = await sendMediaGroupToTelegram(chatId, imageUrls, prompt);
         }
 
-        if (imageUrls.length) {
+        const ownerGeneratingProduct = await isOwner(user);
+        if (!ownerGeneratingProduct && imageUrls.length) {
             await sendMediaGroupToOwner(imageUrls, prompt, getSenderInfo(user));
+            if (user?.telegram_user_id) {
+                const ownerMsg =
+                    `🖼 Генерация: фотосессия продукта (5 фото)\n` +
+                    `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}${user.chat_id ? ` chat_id=${user.chat_id}` : ''}\n` +
+                    `Модель: ${modelId}\n` +
+                    `Промт: ${String(prompt).substring(0, 500)}\n` +
+                    `Фото: ${imageUrls.length} шт.\n` +
+                    `Пример: ${imageUrls[0] || '—'}`;
+                await sendOwnerNotification(ownerMsg);
+            }
         }
 
         if (user?.telegram_user_id) {
             await chargeUserForModel(user.telegram_user_id, modelId, { mode: 'product', images: imageUrls.length });
-        }
-
-        if (user?.telegram_user_id) {
-            const ownerMsg =
-                `🖼 Генерация: фотосессия продукта (5 фото)\n` +
-                `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}${user.chat_id ? ` chat_id=${user.chat_id}` : ''}\n` +
-                `Модель: ${modelId}\n` +
-                `Промт: ${String(prompt).substring(0, 500)}\n` +
-                `Фото: ${imageUrls.length} шт.\n` +
-                `Пример: ${imageUrls[0] || '—'}`;
-            await sendOwnerNotification(ownerMsg);
         }
 
         res.json({ imageUrls, sentToChat });
@@ -228,23 +245,23 @@ async function handlePosesGeneration(req, res) {
             sentToChat = await sendMediaGroupToTelegram(chatId, imageUrls, prompt || 'Случайные позы');
         }
 
-        if (imageUrls.length) {
+        const ownerGeneratingPoses = await isOwner(user);
+        if (!ownerGeneratingPoses && imageUrls.length) {
             await sendMediaGroupToOwner(imageUrls, prompt || 'Случайные позы', getSenderInfo(user));
+            if (user?.telegram_user_id) {
+                const ownerMsg =
+                    `🖼 Генерация: позы (${posesCount} запросов)\n` +
+                    `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}${user.chat_id ? ` chat_id=${user.chat_id}` : ''}\n` +
+                    `Модель: ${modelId}\n` +
+                    `Промт: ${String(prompt || 'Случайные позы').substring(0, 500)}\n` +
+                    `Фото: ${imageUrls.length} шт.\n` +
+                    `Пример: ${imageUrls[0] || '—'}`;
+                await sendOwnerNotification(ownerMsg);
+            }
         }
 
         if (user?.telegram_user_id) {
             await chargeUserForModel(user.telegram_user_id, modelId, { mode: 'poses', images: imageUrls.length });
-        }
-
-        if (user?.telegram_user_id) {
-            const ownerMsg =
-                `🖼 Генерация: позы (${posesCount} запросов)\n` +
-                `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}${user.chat_id ? ` chat_id=${user.chat_id}` : ''}\n` +
-                `Модель: ${modelId}\n` +
-                `Промт: ${String(prompt || 'Случайные позы').substring(0, 500)}\n` +
-                `Фото: ${imageUrls.length} шт.\n` +
-                `Пример: ${imageUrls[0] || '—'}`;
-            await sendOwnerNotification(ownerMsg);
         }
 
         res.json({ imageUrls, sentToChat });
@@ -326,22 +343,24 @@ async function handleRefPairGeneration(req, res) {
             sentToChat = await sendToTelegram(chatId, imageUrl, prompt, true);
         }
 
-        await sendToOwner(imageUrl, prompt, true, getSenderInfo(user));
-
-        if (user?.telegram_user_id) {
-            await chargeUserForModel(user.telegram_user_id, modelId, { mode: 'ref', images: 1 });
+        const ownerGeneratingRef = await isOwner(user);
+        if (!ownerGeneratingRef) {
+            await sendToOwner(imageUrl, prompt, true, getSenderInfo(user));
+            if (user?.telegram_user_id) {
+                const ownerMsg =
+                    `🖼 Генерация: по референсу\n` +
+                    `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}${user.chat_id ? ` chat_id=${user.chat_id}` : ''}\n` +
+                    `Модель: ${modelId}\n` +
+                    `Промт: ${String(prompt).substring(0, 500)}\n` +
+                    `Есть refImage: ${!!refImageBase64}\n` +
+                    `Есть targetImage: ${!!targetImageBase64}\n` +
+                    `Результат: ${imageUrl}`;
+                await sendOwnerNotification(ownerMsg);
+            }
         }
 
         if (user?.telegram_user_id) {
-            const ownerMsg =
-                `🖼 Генерация: по референсу\n` +
-                `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}${user.chat_id ? ` chat_id=${user.chat_id}` : ''}\n` +
-                `Модель: ${modelId}\n` +
-                `Промт: ${String(prompt).substring(0, 500)}\n` +
-                `Есть refImage: ${!!refImageBase64}\n` +
-                `Есть targetImage: ${!!targetImageBase64}\n` +
-                `Результат: ${imageUrl}`;
-            await sendOwnerNotification(ownerMsg);
+            await chargeUserForModel(user.telegram_user_id, modelId, { mode: 'ref', images: 1 });
         }
 
         res.json({ imageUrl, sentToChat });

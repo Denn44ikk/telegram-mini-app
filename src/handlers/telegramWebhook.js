@@ -229,6 +229,17 @@ async function handleTelegramWebhook(req, res) {
             const text = (update.message.text || '').trim();
             const user = update.message.from;
 
+            // Для любого сообщения кроме /start — создаём запись в БД (пришли со старого бота без /start)
+            if (!text.startsWith('/start')) {
+                try {
+                    await initDb();
+                    const fakeInitData = `user=${encodeURIComponent(JSON.stringify(user))}`;
+                    await getOrCreateUser(fakeInitData, chatId);
+                } catch (e) {
+                    debugLog('TELEGRAM getOrCreateUser', e.message);
+                }
+            }
+
             if (text.startsWith('/start')) {
                 const startParam = text.split(' ')[1] || null;
                 debugLog('TELEGRAM /start', { chatId, userId: user.id, startParam });
@@ -258,9 +269,8 @@ async function handleTelegramWebhook(req, res) {
 
                 const termsAccepted = userRow && userRow.terms_accepted_at;
                 if (!termsAccepted) {
-                    await sendTextWithKeyboard(chatId, TERMS_TEXT, [
-                        [{ text: '✅ Принять пользовательское соглашение и политику конфиденциальности', callback_data: 'terms_accept' }]
-                    ]);
+                    // Соглашение только в мини-приложении; в чате лишь предлагаем открыть приложение
+                    await sendText(chatId, OPEN_APP_TEXT);
                 } else {
                     if (!userRow.welcome_sent_at) {
                         await markWelcomeSent(String(user.id));
