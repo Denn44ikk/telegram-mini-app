@@ -220,13 +220,7 @@
             overflow: hidden;
         }
         .photo-insert-icon {
-            position: absolute;
-            inset: 0;
-            border-radius: 8px;
-            background-color: #8BDCF7;
-            background-image:
-                linear-gradient(90deg, transparent 0, transparent 46%, rgba(0,0,0,.2) 46%, rgba(0,0,0,.2) 54%, transparent 54%),
-                linear-gradient(transparent 0, transparent 46%, rgba(0,0,0,.2) 46%, rgba(0,0,0,.2) 54%, transparent 54%);
+            display: none;
         }
         .photo-insert-preview {
             position: absolute;
@@ -237,7 +231,6 @@
             border-radius: 8px;
             display: none;
         }
-        .photo-insert-icon-wrap.has-photo .photo-insert-icon { display: none; }
         .photo-insert-icon-wrap.has-photo .photo-insert-preview { display: block; }
         .photo-insert-label {
             color: #fff;
@@ -1597,7 +1590,10 @@
             if (screenId === 'settings-screen') loadSettings();
             if (screenId === 'balance-screen') loadBalance();
             if (screenId === 'history-screen') loadPaymentHistory();
-            if (screenId === 'ref-screen') initRefTemplates();
+            if (screenId === 'ref-screen') {
+                initRefTemplates();
+                setRefSource(refSourceMode);
+            }
         }
 
         function openSupport(event) {
@@ -2021,12 +2017,17 @@
                 pastedFiles.refStyle = null;
                 refTemplateBase64 = null;
                 document.querySelectorAll('.ref-template-item').forEach(el => el.classList.remove('selected'));
-                const refChosen = document.getElementById('ref-template-chosen');
-                if (refChosen) refChosen.style.display = 'none';
+                document.getElementById('ref-templates-list-view').style.display = 'block';
+                document.getElementById('ref-template-workspace-view').style.display = 'none';
                 document.getElementById('ref-style-icon-wrap').classList.remove('has-photo');
                 document.getElementById('ref-style-preview').src = '';
                 document.getElementById('ref-style-text').innerText = 'Загрузить референс (стиль) или Ctrl+V';
                 document.getElementById('ref-style-clear').classList.remove('visible');
+                if (refSourceMode === 'template') {
+                    document.getElementById('ref-target-wrap').style.display = 'none';
+                    document.getElementById('ref-result-area').style.display = 'none';
+                    document.getElementById('btn-ref').style.display = 'none';
+                }
             } else if (id === 'ref-target') {
                 document.getElementById('ref-target-file').value = '';
                 pastedFiles.refTarget = null;
