@@ -1,10 +1,10 @@
 {
   "templates": [
-    { "name": "Окно 1", "image": "1.webp" },
-    { "name": "Окно 2", "image": "2.webp" },
-    { "name": "Окно 3", "image": "3.webp" },
-    { "name": "Окно 4", "image": "4.webp" },
-    { "name": "Окно 5", "image": "5.webp" },
-    { "name": "Окно 6", "image": "6.webp" }
+    { "name": "Окно 1", "image": "1.jpg" },
+    { "name": "Окно 2", "image": "2.jpg" },
+    { "name": "Окно 3", "image": "3.jpg" },
+    { "name": "Окно 4", "image": "4.jpg" },
+    { "name": "Окно 5", "image": "5.jpg" },
+    { "name": "Окно 6", "image": "6.jpg" }
   ]
 }
