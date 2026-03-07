@@ -340,6 +340,14 @@
         }
         /* Одна картинка: скрыта по умолчанию, видна когда есть результат */
         .result-placeholder:not(.has-result) .result-image-wrap img { display: none; }
+        /* В пустом состоянии надпись строго по центру по вертикали и горизонтали */
+        .result-placeholder:not(.has-result) .placeholder-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            margin: 0;
+        }
         .result-placeholder .placeholder-text {
             display: flex;
             flex-direction: column;
@@ -347,8 +355,13 @@
             justify-content: center;
             gap: 6px;
             width: 100%;
+            max-width: 100%;
             text-align: center;
             box-sizing: border-box;
+        }
+        .result-placeholder.has-result .placeholder-text {
+            position: static;
+            transform: none;
         }
         .result-placeholder .placeholder-text p {
             margin: 0;
@@ -1032,7 +1045,7 @@
             <div class="placeholder-text">
                 <i class="fa-regular fa-image" style="font-size: 24px;"></i>
                 <p>Результат</p>
-                <p class="result-hint">(Готовый файл придёт Вам в беседу с ботом)</p>
+                <p class="result-hint">Готовый файл придёт Вам в беседу с ботом!</p>
             </div>
             <div class="result-image-wrap">
                 <img id="gen-img" class="result-single-img" src="" alt="">
@@ -1074,7 +1087,7 @@
             <div class="placeholder-text">
                 <i class="fa-regular fa-image" style="font-size: 24px;"></i>
                 <p>Результат (5 фото)</p>
-                <p class="result-hint">(Готовый файл придёт Вам в беседу с ботом)</p>
+                <p class="result-hint">Готовый файл придёт Вам в беседу с ботом!</p>
             </div>
             <div class="product-result-wrap">
                 <div id="product-images-grid" class="product-images-grid"></div>
