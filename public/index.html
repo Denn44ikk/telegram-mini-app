@@ -1172,7 +1172,7 @@
             <div class="placeholder-text">
                 <i class="fa-regular fa-image" style="font-size: 24px;"></i>
                 <p>Результат</p>
-                <p class="result-hint">(Готовый файл придёт Вам в беседу с ботом)</p>
+                <p class="result-hint">Готовый файл придёт Вам в беседу с ботом!</p>
             </div>
             <div class="result-image-wrap">
                 <img id="ref-img" class="result-single-img" src="" alt="">
@@ -1219,7 +1219,7 @@
             <div class="placeholder-text">
                 <i class="fa-regular fa-image" style="font-size: 24px;"></i>
                 <p>Результат (несколько поз)</p>
-                <p class="result-hint">(Готовый файл придёт Вам в беседу с ботом)</p>
+                <p class="result-hint">Готовый файл придёт Вам в беседу с ботом!</p>
             </div>
             <div class="product-result-wrap">
                 <div id="poses-images-grid" class="product-images-grid"></div>
@@ -1437,7 +1437,8 @@
         let activePasteTarget = null;
         let termsAccepted = true;
 
-        const REF_TEMPLATES = [
+        /** Шаблоны по умолчанию (SVG), если нет ref-templates.json или он пустой */
+        const REF_TEMPLATES_FALLBACK = [
             { name: 'Окно 1', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#87CEEB" stroke="#2a4a6a" stroke-width="3"/><line x1="50" y1="0" x2="50" y2="100" stroke="#2a4a6a" stroke-width="2"/><line x1="0" y1="50" x2="100" y2="50" stroke="#2a4a6a" stroke-width="2"/></svg>' },
             { name: 'Окно 2', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#B0E0E6" stroke="#3d6b8a" stroke-width="2"/><rect x="5" y="5" width="40" height="40" fill="none" stroke="#3d6b8a" stroke-width="1.5"/><rect x="55" y="5" width="40" height="40" fill="none" stroke="#3d6b8a" stroke-width="1.5"/><rect x="5" y="55" width="40" height="40" fill="none" stroke="#3d6b8a" stroke-width="1.5"/><rect x="55" y="55" width="40" height="40" fill="none" stroke="#3d6b8a" stroke-width="1.5"/></svg>' },
             { name: 'Окно 3', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#E0F4FF" stroke="#1e3a5f" stroke-width="2"/><line x1="33.33" y1="0" x2="33.33" y2="100" stroke="#1e3a5f" stroke-width="1.5"/><line x1="66.66" y1="0" x2="66.66" y2="100" stroke="#1e3a5f" stroke-width="1.5"/><line x1="0" y1="33.33" x2="100" y2="33.33" stroke="#1e3a5f" stroke-width="1.5"/><line x1="0" y1="66.66" x2="100" y2="66.66" stroke="#1e3a5f" stroke-width="1.5"/></svg>' },
@@ -1445,6 +1446,16 @@
             { name: 'Окно 5', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#AFEEEE" stroke="#285e61" stroke-width="2"/><line x1="0" y1="0" x2="100" y2="100" stroke="#285e61" stroke-width="1.5"/><line x1="100" y1="0" x2="0" y2="100" stroke="#285e61" stroke-width="1.5"/><circle cx="50" cy="50" r="8" fill="none" stroke="#285e61" stroke-width="1.5"/></svg>' },
             { name: 'Окно 6', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#B8D4E3" stroke="#1a365d" stroke-width="2"/><rect x="15" y="15" width="32" height="32" fill="none" stroke="#1a365d" stroke-width="1.5"/><rect x="53" y="15" width="32" height="32" fill="none" stroke="#1a365d" stroke-width="1.5"/><rect x="15" y="53" width="32" height="32" fill="none" stroke="#1a365d" stroke-width="1.5"/><rect x="53" y="53" width="32" height="32" fill="none" stroke="#1a365d" stroke-width="1.5"/></svg>' }
         ];
+        let refTemplatesList = null;
+        async function loadRefTemplates() {
+            try {
+                const r = await fetch('/ref-templates.json');
+                const data = await r.json();
+                refTemplatesList = (data.templates && data.templates.length) ? data.templates : [];
+            } catch (e) {
+                refTemplatesList = [];
+            }
+        }
 
         function setRefSource(mode) {
             refSourceMode = mode;
@@ -1503,38 +1514,61 @@
             tg.HapticFeedback && tg.HapticFeedback.selectionOccurred();
         }
 
+        function setRefTemplateChosen(dataUrl, name, item) {
+            refTemplateBase64 = dataUrl;
+            pastedFiles.refStyle = null;
+            document.getElementById('ref-style-file').value = '';
+            document.getElementById('ref-style-preview').src = dataUrl;
+            document.getElementById('ref-style-preview').style.display = 'block';
+            document.getElementById('ref-style-text').innerText = 'Шаблон: ' + name;
+            document.getElementById('ref-style-clear').classList.add('visible');
+            document.querySelectorAll('.ref-template-item').forEach(el => el.classList.remove('selected'));
+            if (item) item.classList.add('selected');
+            const chosenText = document.getElementById('ref-template-chosen-text');
+            const chosenImg = document.getElementById('ref-template-chosen-img');
+            if (chosenText && chosenImg) {
+                chosenText.textContent = 'Референс: ' + name;
+                chosenImg.src = dataUrl;
+            }
+            document.getElementById('ref-templates-list-view').style.display = 'none';
+            document.getElementById('ref-template-workspace-view').style.display = 'block';
+            document.getElementById('ref-target-wrap').style.display = 'block';
+            document.getElementById('ref-result-area').style.display = 'block';
+            document.getElementById('btn-ref').style.display = 'block';
+            tg.HapticFeedback && tg.HapticFeedback.selectionOccurred();
+        }
+
         function initRefTemplates() {
             const grid = document.getElementById('ref-templates-grid');
-            if (!grid || grid.children.length) return;
-            REF_TEMPLATES.forEach((t, i) => {
-                const dataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(t.svg)));
+            if (!grid) return;
+            grid.innerHTML = '';
+            const list = (refTemplatesList && refTemplatesList.length > 0) ? refTemplatesList : REF_TEMPLATES_FALLBACK;
+            list.forEach((t, i) => {
+                const isImage = !!t.image;
+                const imgSrc = isImage ? ('/' + t.image) : ('data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(t.svg))));
                 const item = document.createElement('button');
                 item.type = 'button';
                 item.className = 'ref-template-item';
                 item.title = t.name;
-                item.innerHTML = '<img src="' + dataUrl + '" alt="' + t.name + '">';
-                item.onclick = () => {
-                    refTemplateBase64 = dataUrl;
-                    pastedFiles.refStyle = null;
-                    document.getElementById('ref-style-file').value = '';
-                    document.getElementById('ref-style-preview').src = dataUrl;
-                    document.getElementById('ref-style-preview').style.display = 'block';
-                    document.getElementById('ref-style-text').innerText = 'Шаблон: ' + t.name;
-                    document.getElementById('ref-style-clear').classList.add('visible');
-                    document.querySelectorAll('.ref-template-item').forEach(el => el.classList.remove('selected'));
-                    item.classList.add('selected');
-                    const chosenText = document.getElementById('ref-template-chosen-text');
-                    const chosenImg = document.getElementById('ref-template-chosen-img');
-                    if (chosenText && chosenImg) {
-                        chosenText.textContent = 'Референс: ' + t.name;
-                        chosenImg.src = dataUrl;
+                item.innerHTML = '<img src="' + imgSrc + '" alt="' + t.name + '" loading="lazy">';
+                item.onclick = async () => {
+                    let dataUrl = imgSrc;
+                    if (isImage) {
+                        try {
+                            const r = await fetch(imgSrc);
+                            const blob = await r.blob();
+                            dataUrl = await new Promise((res, rej) => {
+                                const fr = new FileReader();
+                                fr.onload = () => res(fr.result);
+                                fr.onerror = rej;
+                                fr.readAsDataURL(blob);
+                            });
+                        } catch (err) {
+                            showErrorToast('Не удалось загрузить шаблон.');
+                            return;
+                        }
                     }
-                    document.getElementById('ref-templates-list-view').style.display = 'none';
-                    document.getElementById('ref-template-workspace-view').style.display = 'block';
-                    document.getElementById('ref-target-wrap').style.display = 'block';
-                    document.getElementById('ref-result-area').style.display = 'block';
-                    document.getElementById('btn-ref').style.display = 'block';
-                    tg.HapticFeedback && tg.HapticFeedback.selectionOccurred();
+                    setRefTemplateChosen(dataUrl, t.name, item);
                 };
                 grid.appendChild(item);
             });
@@ -1644,8 +1678,11 @@
             if (screenId === 'balance-screen') loadBalance();
             if (screenId === 'history-screen') loadPaymentHistory();
             if (screenId === 'ref-screen') {
-                initRefTemplates();
-                setRefSource(refSourceMode);
+                refTemplatesList = null;
+                loadRefTemplates().then(() => {
+                    initRefTemplates();
+                    setRefSource(refSourceMode);
+                });
             }
         }
 
