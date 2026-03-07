@@ -340,6 +340,20 @@
         }
         /* Одна картинка: скрыта по умолчанию, видна когда есть результат */
         .result-placeholder:not(.has-result) .result-image-wrap img { display: none; }
+        .result-placeholder .placeholder-text {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+        .result-placeholder .result-hint {
+            font-size: 12px;
+            color: var(--hint-color);
+            opacity: 0.9;
+            text-align: center;
+            margin: 0;
+        }
+        .result-placeholder.has-result .result-hint { display: block; }
 
         .main-btn {
             width: 100%;
@@ -1007,9 +1021,10 @@
         </label>
 
         <div class="result-placeholder" id="gen-result-area">
-            <div class="placeholder-text" style="display:flex; flex-direction:column; align-items:center;">
+            <div class="placeholder-text">
                 <i class="fa-regular fa-image" style="font-size: 24px;"></i>
                 <p>Результат</p>
+                <p class="result-hint">(Готовый файл придёт Вам в беседу с ботом)</p>
             </div>
             <div class="result-image-wrap">
                 <img id="gen-img" class="result-single-img" src="" alt="">
@@ -1048,8 +1063,10 @@
         </div>
 
         <div class="result-placeholder" id="product-result-area" style="min-height: 200px;">
-            <div class="placeholder-text" style="display:flex; flex-direction:column; align-items:center;">
+            <div class="placeholder-text">
+                <i class="fa-regular fa-image" style="font-size: 24px;"></i>
                 <p>Результат (5 фото)</p>
+                <p class="result-hint">(Готовый файл придёт Вам в беседу с ботом)</p>
             </div>
             <div class="product-result-wrap">
                 <div id="product-images-grid" class="product-images-grid"></div>
@@ -1131,9 +1148,10 @@
         </div>
 
         <div class="result-placeholder" id="ref-result-area">
-            <div class="placeholder-text" style="display:flex; flex-direction:column; align-items:center;">
+            <div class="placeholder-text">
                 <i class="fa-regular fa-image" style="font-size: 24px;"></i>
                 <p>Результат</p>
+                <p class="result-hint">(Готовый файл придёт Вам в беседу с ботом)</p>
             </div>
             <div class="result-image-wrap">
                 <img id="ref-img" class="result-single-img" src="" alt="">
@@ -1177,8 +1195,10 @@
         </div>
 
         <div class="result-placeholder" id="poses-result-area" style="min-height: 200px;">
-            <div class="placeholder-text" style="display:flex; flex-direction:column; align-items:center;">
+            <div class="placeholder-text">
+                <i class="fa-regular fa-image" style="font-size: 24px;"></i>
                 <p>Результат (несколько поз)</p>
+                <p class="result-hint">(Готовый файл придёт Вам в беседу с ботом)</p>
             </div>
             <div class="product-result-wrap">
                 <div id="poses-images-grid" class="product-images-grid"></div>
