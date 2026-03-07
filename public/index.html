@@ -605,8 +605,9 @@
             border: 1px solid rgba(255,255,255,.2);
             background: rgba(255,255,255,.06);
             color: var(--hint-color);
-            font-size: 14px;
-            font-weight: 500;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-size: 17px;
+            font-weight: 600;
             cursor: pointer;
             transition: all .2s ease;
         }
@@ -617,6 +618,8 @@
             color: #fff;
         }
         .ref-source-panel { margin-bottom: 16px; }
+        .ref-prompt-wrap { margin-bottom: 16px; }
+        .ref-target-wrap { margin-bottom: 16px; }
         .ref-templates-title {
             font-size: 14px;
             color: var(--hint-color);
@@ -997,8 +1000,10 @@
             <button type="button" class="ref-source-btn" id="ref-source-template" onclick="setRefSource('template')">Шаблон</button>
         </div>
 
-        <div class="input-card">
-            <textarea id="ref-prompt" placeholder="Опишите, что вы хотите получить..."></textarea>
+        <div id="ref-prompt-wrap" class="ref-prompt-wrap">
+            <div class="input-card">
+                <textarea id="ref-prompt" placeholder="Опишите, что вы хотите получить..."></textarea>
+            </div>
         </div>
 
         <div id="ref-own-block" class="ref-source-panel">
@@ -1011,16 +1016,6 @@
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </label>
-
-        <label class="mini-upload" onclick="setActivePasteTarget('ref-target')">
-            <input type="file" id="ref-target-file" accept="image/*" style="display:none" onchange="previewFile('ref-target-file', 'ref-target-preview')">
-            <i class="fa-regular fa-image" style="font-size: 18px;"></i>
-            <span id="ref-target-text">Загрузить основное фото или Ctrl+V</span>
-            <img id="ref-target-preview" class="preview-thumb">
-            <button type="button" class="upload-clear-btn" id="ref-target-clear" onclick="clearUpload(event, 'ref-target')">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-        </label>
         </div>
 
         <div id="ref-templates-block" class="ref-source-panel" style="display: none;">
@@ -1030,6 +1025,18 @@
                 <img id="ref-template-chosen-img" class="ref-template-chosen-img" alt="">
             </div>
             <div id="ref-templates-grid" class="ref-templates-grid"></div>
+        </div>
+
+        <div id="ref-target-wrap" class="ref-target-wrap">
+            <label class="mini-upload" onclick="setActivePasteTarget('ref-target')">
+                <input type="file" id="ref-target-file" accept="image/*" style="display:none" onchange="previewFile('ref-target-file', 'ref-target-preview')">
+                <i class="fa-regular fa-image" style="font-size: 18px;"></i>
+                <span id="ref-target-text">Загрузить основное фото или Ctrl+V</span>
+                <img id="ref-target-preview" class="preview-thumb">
+                <button type="button" class="upload-clear-btn" id="ref-target-clear" onclick="clearUpload(event, 'ref-target')">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </label>
         </div>
 
         <div class="result-placeholder" id="ref-result-area">
@@ -1305,8 +1312,11 @@
             refSourceMode = mode;
             document.getElementById('ref-source-own').classList.toggle('active', mode === 'own');
             document.getElementById('ref-source-template').classList.toggle('active', mode === 'template');
+            document.getElementById('ref-prompt-wrap').style.display = mode === 'template' ? 'none' : 'block';
             document.getElementById('ref-own-block').style.display = mode === 'own' ? 'block' : 'none';
             document.getElementById('ref-templates-block').style.display = mode === 'template' ? 'block' : 'none';
+            const refTargetText = document.getElementById('ref-target-text');
+            if (refTargetText) refTargetText.innerText = mode === 'template' ? 'Загрузите ваше фото или Ctrl+V' : 'Загрузить основное фото или Ctrl+V';
             if (mode === 'own') {
                 refTemplateBase64 = null;
                 document.querySelectorAll('.ref-template-item').forEach(el => el.classList.remove('selected'));
@@ -1886,7 +1896,7 @@
                 pastedFiles.refTarget = null;
                 document.getElementById('ref-target-preview').style.display = 'none';
                 document.getElementById('ref-target-preview').src = '';
-                document.getElementById('ref-target-text').innerText = 'Загрузить основное фото или Ctrl+V';
+                document.getElementById('ref-target-text').innerText = refSourceMode === 'template' ? 'Загрузите ваше фото или Ctrl+V' : 'Загрузить основное фото или Ctrl+V';
                 document.getElementById('ref-target-clear').classList.remove('visible');
             }
         }
@@ -2038,7 +2048,6 @@
                 bodyData = { formData: true, prompt, initData: tg.initData, file: fileToSend };
             }
             else if (type === 'ref') {
-                prompt = document.getElementById('ref-prompt').value;
                 const styleInput = document.getElementById('ref-style-file');
                 const targetInput = document.getElementById('ref-target-file');
                 btn = document.getElementById('btn-ref');
@@ -2047,19 +2056,35 @@
                 apiUrl = '/api/generate-refpair';
                 const refFile = styleInput.files[0] || pastedFiles.refStyle;
                 const targetFile = targetInput.files[0] || pastedFiles.refTarget;
+                const isTemplateMode = refSourceMode === 'template';
+                if (isTemplateMode) {
+                    prompt = 'Перенеси стиль и композицию референса на это фото, сохрани человека или объект узнаваемым.';
+                } else {
+                    prompt = document.getElementById('ref-prompt').value;
+                }
                 uiLog('runGeneration:ref:init', {
+                    isTemplateMode,
                     hasPrompt: !!prompt,
-                    promptLength: (prompt || '').length,
                     hasRefFile: !!refFile,
+                    hasRefTemplate: !!refTemplateBase64,
                     hasTargetFile: !!targetFile
                 });
 
                 if (!refFile && !refTemplateBase64) {
-                    uiLog('runGeneration:ref:abort', { reason: 'no refFile and no template' });
+                    uiLog('runGeneration:ref:abort', { reason: 'no ref and no template' });
                     showErrorToast('Нужно хотя бы одно фото‑референс или выберите шаблон.');
                     return;
                 }
-                if (!prompt) {
+                if (isTemplateMode) {
+                    if (!refTemplateBase64) {
+                        showErrorToast('Выберите шаблон.');
+                        return;
+                    }
+                    if (!targetFile) {
+                        showErrorToast('Загрузите ваше фото.');
+                        return;
+                    }
+                } else if (!prompt) {
                     uiLog('runGeneration:ref:abort', { reason: 'no prompt' });
                     showErrorToast('Опишите, что вы хотите получить по референсу.');
                     return;
@@ -2075,7 +2100,6 @@
                     uiLog('runGeneration:ref:targetBase64Ready', targetMeta);
                     bodyData = { prompt, initData: tg.initData, refImageBase64: refBase64, targetImageBase64: targetBase64 };
                 } else {
-                    // Только референс + промт, без основного фото
                     bodyData = { prompt, initData: tg.initData, refImageBase64: refBase64 };
                 }
             }
