@@ -195,20 +195,66 @@
         textarea { width: 100%; height: 80px; background: transparent; border: none; color: var(--text-color); font-size: 16px; resize: none; outline: none; }
         textarea::placeholder { color: var(--hint-color); }
 
-        .mini-upload {
-            display: flex; align-items: center; gap: 10px; margin-bottom: 15px;
-            padding: 12px;
-            border: 1px dashed rgba(255,255,255,.25);
+        /* Единый дизайн карточки вставки фото (тёмно-фиолетовая карточка) */
+        .photo-insert-card {
+            background: #372352;
             border-radius: 12px;
-            color: var(--hint-color);
+            padding: 16px;
+            margin-bottom: 0;
+            border: 1px solid rgba(86,55,119,.6);
+            transition: background 0.3s, box-shadow 0.3s;
+        }
+        .photo-insert-card.highlight { background: #432a62; box-shadow: 0 0 0 2px rgba(139,220,247,.35); }
+        .photo-insert-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .photo-insert-icon-wrap {
+            position: relative;
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+            min-height: 48px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .photo-insert-icon {
+            position: absolute;
+            inset: 0;
+            border-radius: 8px;
+            background-color: #8BDCF7;
+            background-image:
+                linear-gradient(90deg, transparent 0, transparent 46%, rgba(0,0,0,.2) 46%, rgba(0,0,0,.2) 54%, transparent 54%),
+                linear-gradient(transparent 0, transparent 46%, rgba(0,0,0,.2) 46%, rgba(0,0,0,.2) 54%, transparent 54%);
+        }
+        .photo-insert-preview {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 8px;
+            display: none;
+        }
+        .photo-insert-icon-wrap.has-photo .photo-insert-icon { display: none; }
+        .photo-insert-icon-wrap.has-photo .photo-insert-preview { display: block; }
+        .photo-insert-label {
+            color: #fff;
+            font-size: 15px;
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .mini-upload {
+            display: block;
+            margin-bottom: 16px;
             cursor: pointer;
             font-size: 14px;
-            background: rgba(255,255,255,.06);
-            backdrop-filter: blur(12px);
-            transition: border 0.3s, background 0.3s;
             position: relative;
         }
-        .mini-upload.highlight { border-color: rgba(139,92,246,.6); background: rgba(139,92,246,.15); color: #c4b5fd; }
+        .mini-upload .photo-insert-card { margin-bottom: 0; }
+        .mini-upload.highlight .photo-insert-card { background: #432a62; box-shadow: 0 0 0 2px rgba(139,220,247,.35); }
         .preview-thumb { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; display: none; }
 
         .upload-clear-btn {
@@ -233,20 +279,13 @@
         }
 
         .upload-area {
-            border: 2px dashed rgba(139,92,246,.5);
-            border-radius: 16px;
-            padding: 20px;
-            text-align: center;
-            color: var(--hint-color);
-            cursor: pointer;
             margin-bottom: 20px;
             display: block;
-            background: rgba(255,255,255,.06);
-            backdrop-filter: blur(12px);
-            transition: border 0.3s, background 0.3s;
+            cursor: pointer;
             position: relative;
         }
-        .upload-area.highlight { border-color: rgba(139,92,246,.7); background: rgba(139,92,246,.15); color: #c4b5fd; }
+        .upload-area .photo-insert-card { margin-bottom: 0; }
+        .upload-area.highlight .photo-insert-card { background: #432a62; box-shadow: 0 0 0 2px rgba(139,220,247,.35); }
         .upload-preview { max-width: 100%; max-height: 200px; border-radius: 10px; display: none; margin-top: 10px; }
 
         /* БЛОК РЕЗУЛЬТАТА — glass */
@@ -948,9 +987,15 @@
 
         <label id="gen-drop-zone" class="upload-area" onclick="setActivePasteTarget('gen')">
             <input type="file" id="gen-file" accept="image/*" style="display:none" onchange="previewFile('gen-file', 'gen-preview')">
-            <i class="fa-solid fa-cloud-arrow-up" style="font-size: 30px; margin-bottom: 10px;"></i>
-            <div id="gen-file-text">Загрузить или вставить (Ctrl+V)</div>
-            <img id="gen-preview" class="upload-preview" src="">
+            <div class="photo-insert-card">
+                <div class="photo-insert-row">
+                    <div class="photo-insert-icon-wrap" id="gen-icon-wrap">
+                        <span class="photo-insert-icon"></span>
+                        <img id="gen-preview" class="photo-insert-preview" src="" alt="">
+                    </div>
+                    <span id="gen-file-text" class="photo-insert-label">Загрузить или вставить (Ctrl+V)</span>
+                </div>
+            </div>
             <button type="button" class="upload-clear-btn" id="gen-clear" onclick="clearUpload(event, 'gen')">
                 <i class="fa-solid fa-xmark"></i>
             </button>
@@ -979,9 +1024,15 @@
 
         <label id="product-drop-zone" class="upload-area" onclick="setActivePasteTarget('product')">
             <input type="file" id="product-file" accept="image/*" style="display:none" onchange="previewFile('product-file', 'product-preview')">
-            <i class="fa-solid fa-cloud-arrow-up" style="font-size: 30px; margin-bottom: 10px;"></i>
-            <div id="product-text">Загрузить или вставить (Ctrl+V)</div>
-            <img id="product-preview" class="upload-preview" src="">
+            <div class="photo-insert-card">
+                <div class="photo-insert-row">
+                    <div class="photo-insert-icon-wrap" id="product-icon-wrap">
+                        <span class="photo-insert-icon"></span>
+                        <img id="product-preview" class="photo-insert-preview" src="" alt="">
+                    </div>
+                    <span id="product-text" class="photo-insert-label">Загрузить или вставить (Ctrl+V)</span>
+                </div>
+            </div>
             <button type="button" class="upload-clear-btn" id="product-clear" onclick="clearUpload(event, 'product')">
                 <i class="fa-solid fa-xmark"></i>
             </button>
@@ -1025,9 +1076,15 @@
         <div id="ref-own-block" class="ref-source-panel">
         <label class="mini-upload" onclick="setActivePasteTarget('ref-style')">
             <input type="file" id="ref-style-file" accept="image/*" style="display:none" onchange="previewFile('ref-style-file', 'ref-style-preview')">
-            <i class="fa-regular fa-image" style="font-size: 18px;"></i>
-            <span id="ref-style-text">Загрузить референс (стиль) или Ctrl+V</span>
-            <img id="ref-style-preview" class="preview-thumb">
+            <div class="photo-insert-card">
+                <div class="photo-insert-row">
+                    <div class="photo-insert-icon-wrap" id="ref-style-icon-wrap">
+                        <span class="photo-insert-icon"></span>
+                        <img id="ref-style-preview" class="photo-insert-preview" src="" alt="">
+                    </div>
+                    <span id="ref-style-text" class="photo-insert-label">Загрузить референс (стиль) или Ctrl+V</span>
+                </div>
+            </div>
             <button type="button" class="upload-clear-btn" id="ref-style-clear" onclick="clearUpload(event, 'ref-style')">
                 <i class="fa-solid fa-xmark"></i>
             </button>
@@ -1053,9 +1110,15 @@
         <div id="ref-target-wrap" class="ref-target-wrap">
             <label class="mini-upload" onclick="setActivePasteTarget('ref-target')">
                 <input type="file" id="ref-target-file" accept="image/*" style="display:none" onchange="previewFile('ref-target-file', 'ref-target-preview')">
-                <i class="fa-regular fa-image" style="font-size: 18px;"></i>
-                <span id="ref-target-text">Загрузить основное фото или Ctrl+V</span>
-                <img id="ref-target-preview" class="preview-thumb">
+                <div class="photo-insert-card">
+                    <div class="photo-insert-row">
+                        <div class="photo-insert-icon-wrap" id="ref-target-icon-wrap">
+                            <span class="photo-insert-icon"></span>
+                            <img id="ref-target-preview" class="photo-insert-preview" src="" alt="">
+                        </div>
+                        <span id="ref-target-text" class="photo-insert-label">Загрузить основное фото или Ctrl+V</span>
+                    </div>
+                </div>
                 <button type="button" class="upload-clear-btn" id="ref-target-clear" onclick="clearUpload(event, 'ref-target')">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
@@ -1085,9 +1148,15 @@
 
         <label id="poses-drop-zone" class="upload-area" onclick="setActivePasteTarget('poses')">
             <input type="file" id="poses-file" accept="image/*" style="display:none" onchange="previewFile('poses-file', 'poses-preview')">
-            <i class="fa-solid fa-cloud-arrow-up" style="font-size: 30px; margin-bottom: 10px;"></i>
-            <div id="poses-text">Загрузите фото человека</div>
-            <img id="poses-preview" class="upload-preview" src="">
+            <div class="photo-insert-card">
+                <div class="photo-insert-row">
+                    <div class="photo-insert-icon-wrap" id="poses-icon-wrap">
+                        <span class="photo-insert-icon"></span>
+                        <img id="poses-preview" class="photo-insert-preview" src="" alt="">
+                    </div>
+                    <span id="poses-text" class="photo-insert-label">Загрузите фото человека</span>
+                </div>
+            </div>
             <button type="button" class="upload-clear-btn" id="poses-clear" onclick="clearUpload(event, 'poses')">
                 <i class="fa-solid fa-xmark"></i>
             </button>
@@ -1374,7 +1443,8 @@
             refTemplateBase64 = null;
             pastedFiles.refStyle = null;
             document.getElementById('ref-style-file').value = '';
-            document.getElementById('ref-style-preview').style.display = 'none';
+            const refStyleWrap = document.getElementById('ref-style-icon-wrap');
+            if (refStyleWrap) refStyleWrap.classList.remove('has-photo');
             document.getElementById('ref-style-preview').src = '';
             document.getElementById('ref-style-text').innerText = 'Загрузить референс (стиль) или Ctrl+V';
             document.getElementById('ref-style-clear').classList.remove('visible');
@@ -1927,21 +1997,22 @@
             if (id === 'gen') {
                 document.getElementById('gen-file').value = '';
                 pastedFiles.gen = null;
-                document.getElementById('gen-preview').style.display = 'none';
+                const genWrap = document.getElementById('gen-icon-wrap');
+                if (genWrap) genWrap.classList.remove('has-photo');
                 document.getElementById('gen-preview').src = '';
                 document.getElementById('gen-file-text').innerText = 'Загрузить или вставить (Ctrl+V)';
                 document.getElementById('gen-clear').classList.remove('visible');
             } else if (id === 'product') {
                 document.getElementById('product-file').value = '';
                 pastedFiles.product = null;
-                document.getElementById('product-preview').style.display = 'none';
+                document.getElementById('product-icon-wrap').classList.remove('has-photo');
                 document.getElementById('product-preview').src = '';
                 document.getElementById('product-text').innerText = 'Загрузить или вставить (Ctrl+V)';
                 document.getElementById('product-clear').classList.remove('visible');
             } else if (id === 'poses') {
                 document.getElementById('poses-file').value = '';
                 pastedFiles.poses = null;
-                document.getElementById('poses-preview').style.display = 'none';
+                document.getElementById('poses-icon-wrap').classList.remove('has-photo');
                 document.getElementById('poses-preview').src = '';
                 document.getElementById('poses-text').innerText = 'Загрузите фото человека';
                 document.getElementById('poses-clear').classList.remove('visible');
@@ -1952,14 +2023,14 @@
                 document.querySelectorAll('.ref-template-item').forEach(el => el.classList.remove('selected'));
                 const refChosen = document.getElementById('ref-template-chosen');
                 if (refChosen) refChosen.style.display = 'none';
-                document.getElementById('ref-style-preview').style.display = 'none';
+                document.getElementById('ref-style-icon-wrap').classList.remove('has-photo');
                 document.getElementById('ref-style-preview').src = '';
                 document.getElementById('ref-style-text').innerText = 'Загрузить референс (стиль) или Ctrl+V';
                 document.getElementById('ref-style-clear').classList.remove('visible');
             } else if (id === 'ref-target') {
                 document.getElementById('ref-target-file').value = '';
                 pastedFiles.refTarget = null;
-                document.getElementById('ref-target-preview').style.display = 'none';
+                document.getElementById('ref-target-icon-wrap').classList.remove('has-photo');
                 document.getElementById('ref-target-preview').src = '';
                 document.getElementById('ref-target-text').innerText = refSourceMode === 'template' ? 'Загрузите ваше фото или Ctrl+V' : 'Загрузить основное фото или Ctrl+V';
                 document.getElementById('ref-target-clear').classList.remove('visible');
@@ -1975,36 +2046,19 @@
             pastedFiles[type] = file;
             const reader = new FileReader();
             reader.onload = (e) => {
-                if (type === 'gen') {
-                    const img = document.getElementById('gen-preview');
+                const imgIds = { gen: 'gen-preview', product: 'product-preview', poses: 'poses-preview', refStyle: 'ref-style-preview', refTarget: 'ref-target-preview' };
+                const labelIds = { gen: 'gen-file-text', product: 'product-text', poses: 'poses-text', refStyle: 'ref-style-text', refTarget: 'ref-target-text' };
+                const clearIds = { gen: 'gen-clear', product: 'product-clear', poses: 'poses-clear', refStyle: 'ref-style-clear', refTarget: 'ref-target-clear' };
+                const typeKey = type === 'ref-style' ? 'refStyle' : type === 'ref-target' ? 'refTarget' : type;
+                const img = document.getElementById(imgIds[typeKey]);
+                if (img) {
                     img.src = e.target.result;
-                    img.style.display = 'block';
-                    document.getElementById('gen-file-text').innerText = "Фото из буфера!";
-                    document.getElementById('gen-clear').classList.add('visible');
-                } else if (type === 'product') {
-                    const img = document.getElementById('product-preview');
-                    img.src = e.target.result;
-                    img.style.display = 'block';
-                    document.getElementById('product-text').innerText = "Фото из буфера!";
-                    document.getElementById('product-clear').classList.add('visible');
-                } else if (type === 'poses') {
-                    const img = document.getElementById('poses-preview');
-                    img.src = e.target.result;
-                    img.style.display = 'block';
-                    document.getElementById('poses-text').innerText = "Фото из буфера!";
-                    document.getElementById('poses-clear').classList.add('visible');
-                } else if (type === 'ref-style') {
-                    const img = document.getElementById('ref-style-preview');
-                    img.src = e.target.result;
-                    img.style.display = 'block';
-                    document.getElementById('ref-style-text').innerText = "Референс из буфера!";
-                    document.getElementById('ref-style-clear').classList.add('visible');
-                } else if (type === 'ref-target') {
-                    const img = document.getElementById('ref-target-preview');
-                    img.src = e.target.result;
-                    img.style.display = 'block';
-                    document.getElementById('ref-target-text').innerText = "Фото из буфера!";
-                    document.getElementById('ref-target-clear').classList.add('visible');
+                    const wrap = img.closest('.photo-insert-icon-wrap');
+                    if (wrap) wrap.classList.add('has-photo');
+                    const label = document.getElementById(labelIds[typeKey]);
+                    if (label) label.innerText = 'Фото принято';
+                    const clearBtn = document.getElementById(clearIds[typeKey]);
+                    if (clearBtn) clearBtn.classList.add('visible');
                 }
             };
             reader.readAsDataURL(file);
@@ -2030,27 +2084,12 @@
                 reader.onload = (e) => {
                     const img = document.getElementById(imgId);
                     img.src = e.target.result;
-                    img.style.display = 'block';
-                    if(inputId === 'gen-file') {
-                        document.getElementById('gen-file-text').innerText = "Фото выбрано";
-                        document.getElementById('gen-clear').classList.add('visible');
-                    }
-                    if(inputId === 'product-file') {
-                        document.getElementById('product-text').innerText = "Фото выбрано";
-                        document.getElementById('product-clear').classList.add('visible');
-                    }
-                    if(inputId === 'poses-file') {
-                        document.getElementById('poses-text').innerText = "Фото выбрано";
-                        document.getElementById('poses-clear').classList.add('visible');
-                    }
-                    if(inputId === 'ref-style-file') {
-                        document.getElementById('ref-style-text').innerText = "Референс выбран";
-                        document.getElementById('ref-style-clear').classList.add('visible');
-                    }
-                    if(inputId === 'ref-target-file') {
-                        document.getElementById('ref-target-text').innerText = "Фото выбрано";
-                        document.getElementById('ref-target-clear').classList.add('visible');
-                    }
+                    const wrap = img.closest('.photo-insert-icon-wrap');
+                    if (wrap) wrap.classList.add('has-photo');
+                    const labelId = { 'gen-preview': 'gen-file-text', 'product-preview': 'product-text', 'poses-preview': 'poses-text', 'ref-style-preview': 'ref-style-text', 'ref-target-preview': 'ref-target-text' }[imgId];
+                    if (labelId) document.getElementById(labelId).innerText = 'Фото принято';
+                    const clearId = { 'gen-preview': 'gen-clear', 'product-preview': 'product-clear', 'poses-preview': 'poses-clear', 'ref-style-preview': 'ref-style-clear', 'ref-target-preview': 'ref-target-clear' }[imgId];
+                    if (clearId) document.getElementById(clearId).classList.add('visible');
                 };
                 reader.readAsDataURL(file);
             }
