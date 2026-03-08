@@ -2226,20 +2226,19 @@
             if(inputId === 'ref-target-file') pastedFiles.refTarget = null;
 
             const reader = new FileReader();
-                reader.onload = (e) => {
-                    const img = document.getElementById(imgId);
-                    img.src = e.target.result;
-                    const wrap = img.closest('.photo-insert-icon-wrap');
-                    const card = wrap && wrap.closest('.photo-insert-card');
-                    if (wrap) wrap.classList.add('has-photo');
-                    if (card) card.classList.add('has-photo');
-                    const labelId = { 'gen-preview': 'gen-file-text', 'product-preview': 'product-text', 'poses-preview': 'poses-text', 'ref-style-preview': 'ref-style-text', 'ref-target-preview': 'ref-target-text' }[imgId];
-                    if (labelId) document.getElementById(labelId).innerText = 'Фото принято';
-                    const clearId = { 'gen-preview': 'gen-clear', 'product-preview': 'product-clear', 'poses-preview': 'poses-clear', 'ref-style-preview': 'ref-style-clear', 'ref-target-preview': 'ref-target-clear' }[imgId];
-                    if (clearId) document.getElementById(clearId).classList.add('visible');
-                };
-                reader.readAsDataURL(file);
-            }
+            reader.onload = (e) => {
+                const img = document.getElementById(imgId);
+                img.src = e.target.result;
+                const wrap = img.closest('.photo-insert-icon-wrap');
+                const card = wrap && wrap.closest('.photo-insert-card');
+                if (wrap) wrap.classList.add('has-photo');
+                if (card) card.classList.add('has-photo');
+                const labelId = { 'gen-preview': 'gen-file-text', 'product-preview': 'product-text', 'poses-preview': 'poses-text', 'ref-style-preview': 'ref-style-text', 'ref-target-preview': 'ref-target-text' }[imgId];
+                if (labelId) document.getElementById(labelId).innerText = 'Фото принято';
+                const clearId = { 'gen-preview': 'gen-clear', 'product-preview': 'product-clear', 'poses-preview': 'poses-clear', 'ref-style-preview': 'ref-style-clear', 'ref-target-preview': 'ref-target-clear' }[imgId];
+                if (clearId) document.getElementById(clearId).classList.add('visible');
+            };
+            reader.readAsDataURL(file);
         }
 
         async function runGeneration(type) {
