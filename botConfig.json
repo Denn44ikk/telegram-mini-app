@@ -40,7 +40,7 @@
       "poses": {
         "id": "poses",
         "displayName": "Случайные позы",
-        "prompt": "Using this person's photo as an identity reference, generate them in a NEW, natural, and dynamic pose according to these instructions: \"%s\". Strictly maintain the same person, facial features, exact skin tone, body proportions, and clothing style. The result must be an ultra high-resolution, hyper-realistic photograph. Ensure perfect anatomy and correct placement for limbs and hands. Keep natural lighting, subtle skin textures, realistic hair dynamics, and fabric folds. Do NOT over-smooth, airbrush, or make it look like an illustration. Return ONLY the image."
+        "prompt": "Using this person's photo as identity reference, generate a NEW pose that is calm and natural according to these instructions: \"%s\". Prefer relaxed poses: standing, sitting, or gentle leaning. Avoid dynamic, jumpy, athletic, or highly active poses—no running, jumping, or exaggerated motion. Strictly maintain the same person, facial features, skin tone, body proportions, and clothing style. The result must be an ultra high-resolution, hyper-realistic photograph with natural lighting and subtle skin textures. Do NOT over-smooth or make it look like an illustration. Return ONLY the image."
       }
     }
   }

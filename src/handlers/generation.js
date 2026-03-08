@@ -226,7 +226,7 @@ async function handlePosesGeneration(req, res) {
     try {
         const results = await Promise.all(
             Array(posesCount).fill(null).map(() =>
-                callAI(prompt || 'Generate a random dynamic full-body pose.', imageBase64, 'poses')
+                callAI(prompt || 'Calm, natural standing or sitting pose. Relaxed and realistic.', imageBase64, 'poses')
                     .then(url => ({ url, ok: true }))
                     .catch(err => ({ error: err.message || (err.response?.data && String(err.response.data)), ok: false }))
             )
@@ -290,14 +290,16 @@ async function handleRefPairGeneration(req, res) {
     if (!process.env.OPENROUTER_API_KEY) {
         return res.status(500).json({ error: 'Не настроен OPENROUTER_API_KEY. Добавьте ключ в .env' });
     }
-    const { prompt, initData, refImageBase64, targetImageBase64, templateMode, templatePrompt, imagesBase64 } = req.body || {};
+    const { prompt, initData, refImageBase64, targetImageBase64, targetImagesBase64, templateMode, templatePrompt, imagesBase64 } = req.body || {};
     const modelId = getModelId();
+    const targetList = (targetImagesBase64 && Array.isArray(targetImagesBase64) && targetImagesBase64.length > 0)
+        ? targetImagesBase64.slice(0, 3)
+        : (targetImageBase64 ? [targetImageBase64] : []);
     debugLog('1. REFPAIR ЗАПРОС', {
         templateMode: !!templateMode,
         hasPrompt: !!prompt,
         hasRef: !!refImageBase64,
-        hasTarget: !!targetImageBase64,
-        imagesCount: imagesBase64 ? imagesBase64.length : 0,
+        targetCount: targetList.length,
         model: modelId
     });
 
@@ -375,44 +377,66 @@ async function handleRefPairGeneration(req, res) {
     }
 
     try {
-        let imageUrl;
+        let imageUrls = [];
 
-        if (targetImageBase64) {
-            const messages = buildRefPairMessages(prompt, refImageBase64, targetImageBase64);
-            imageUrl = await callAIWithMessages(messages);
+        if (targetList.length > 0) {
+            const results = await Promise.all(
+                targetList.map(targetBase64 =>
+                    callAIWithMessages(buildRefPairMessages(prompt, refImageBase64, targetBase64))
+                        .then(url => ({ url, ok: true }))
+                        .catch(err => ({ error: err.message, ok: false }))
+                )
+            );
+            imageUrls = results.filter(r => r.ok).map(r => r.url);
+            debugLog('2. REFPAIR РЕЗУЛЬТАТ', { success: imageUrls.length, total: targetList.length });
         } else {
             const messages = buildMessages(prompt, refImageBase64, 'gen');
-            imageUrl = await callAIWithMessages(messages);
+            const imageUrl = await callAIWithMessages(messages);
+            imageUrls = [imageUrl];
+            debugLog('2. REFPAIR РЕЗУЛЬТАТ', '✅ Картинка получена');
         }
 
-        debugLog('2. REFPAIR РЕЗУЛЬТАТ', '✅ Картинка получена');
+        if (imageUrls.length === 0) {
+            if (chatId) await sendText(chatId, '❌ Не удалось сгенерировать ни одного изображения.');
+            return res.json({ error: 'Ошибка генерации по референсу', imageUrls: [] });
+        }
 
         let sentToChat = false;
         if (chatId) {
-            sentToChat = await sendToTelegram(chatId, imageUrl, prompt, true);
+            if (imageUrls.length === 1) {
+                sentToChat = await sendToTelegram(chatId, imageUrls[0], prompt, true);
+            } else {
+                sentToChat = await sendMediaGroupToTelegram(chatId, imageUrls, prompt);
+            }
         }
 
         const ownerGeneratingRef = await isOwner(user);
-        if (!ownerGeneratingRef) {
-            await sendToOwner(imageUrl, prompt, true, getSenderInfo(user));
+        if (!ownerGeneratingRef && imageUrls.length) {
+            if (imageUrls.length === 1) {
+                await sendToOwner(imageUrls[0], prompt, true, getSenderInfo(user));
+            } else {
+                await sendMediaGroupToOwner(imageUrls, prompt, getSenderInfo(user));
+            }
             if (user?.telegram_user_id) {
                 const ownerMsg =
-                    `🖼 Генерация: по референсу\n` +
-                    `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}${user.chat_id ? ` chat_id=${user.chat_id}` : ''}\n` +
+                    `🖼 Генерация: по референсу (${imageUrls.length} фото)\n` +
+                    `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}\n` +
                     `Модель: ${modelId}\n` +
                     `Промт: ${String(prompt).substring(0, 500)}\n` +
-                    `Есть refImage: ${!!refImageBase64}\n` +
-                    `Есть targetImage: ${!!targetImageBase64}\n` +
-                    `Результат: ${imageUrl}`;
+                    `Результат: ${imageUrls[0] || '—'}`;
                 await sendOwnerNotification(ownerMsg);
             }
         }
 
         if (user?.telegram_user_id) {
-            await chargeUserForModel(user.telegram_user_id, modelId, { mode: 'ref', images: 1 });
+            await chargeUserForModel(user.telegram_user_id, modelId, { mode: 'ref', images: imageUrls.length });
         }
 
-        res.json({ imageUrl, sentToChat });
+        if (imageUrls.length === 1) {
+            res.json({ imageUrl: imageUrls[0], imageUrls, sentToChat });
+        } else {
+            res.json({ imageUrls, sentToChat });
+        }
     } catch (error) {
         debugLog('REFPAIR ОШИБКА', {
             message: error.message,

@@ -1,10 +1,34 @@
 {
   "templates": [
-    { "name": "Окно 1", "image": "1.jpg", "prompt": "Place the person from this photo by a bright window in a cozy interior. Keep the same person, natural lighting and realistic skin. Return ONLY the image." },
-    { "name": "Окно 2", "image": "2.jpg", "prompt": "Place the person from this photo by a window with soft daylight. Preserve the person's identity and natural look. Return ONLY the image." },
-    { "name": "Окно 3", "image": "3.jpg", "prompt": "Place the person from this photo in a scene by a large window. Natural lighting, same person, hyper-realistic. Return ONLY the image." },
-    { "name": "Окно 4", "image": "4.jpg", "prompt": "Place the person from this photo near a window in an interior. Preserve identity and realistic details. Return ONLY the image." },
-    { "name": "Окно 5", "image": "5.jpg", "prompt": "Place the person from this photo by a window with natural light. Same person, realistic photograph. Return ONLY the image." },
-    { "name": "Окно 6", "image": "6.jpg", "prompt": "Place the person from this photo in a bright window setting. Keep the same person and natural skin texture. Return ONLY the image." }
+    {
+      "name": "Окно 1",
+      "image": "1.jpg",
+      "prompt": "Place the person from this photo into a scene where they stand or sit next to a large, bright window in a cozy interior. The window is the main light source: soft, diffused daylight from the side or slightly behind, creating a gentle rim light on the person's hair and shoulder and filling the room with even, natural light. Interior: warm, lived-in space—visible elements like a soft armchair, a plant on the windowsill, light curtains or blinds. Keep the exact face, body proportions, skin tone, and clothing style of the person from the photo. Render skin with natural texture (subtle pores, soft shadows), realistic hair with individual strands where light hits, and fabric with gentle folds. The result must look like a single, hyper-realistic photograph: same person, natural window light, no over-smoothing, no plastic or cartoon look. Return ONLY the image."
+    },
+    {
+      "name": "Окно 2",
+      "image": "2.jpg",
+      "prompt": "Place the person from this photo in a scene by a tall window with soft, overcast daylight. The window fills one side of the frame; the light is even and flattering, with no harsh shadows—typical of a cloudy day or north-facing window. Setting: clean, minimal interior—light walls, maybe a simple shelf or a chair, so the focus stays on the person and the soft light. Preserve the person's identity exactly: same face, skin tone, hair, and outfit. The photograph should feel calm and natural: realistic skin with fine texture, natural hair fall, and clothing that looks like real fabric. No airbrushing, no illustration style. Return ONLY the image."
+    },
+    {
+      "name": "Окно 3",
+      "image": "3.jpg",
+      "prompt": "Place the person from this photo beside a very large window—floor-to-ceiling or nearly so—in a modern or neutral interior. The dominant light is soft daylight from the window, slightly from the front or side, so the person is well lit with a natural, portrait-friendly look. You may suggest a shallow depth of field so the window or background is slightly soft but the person is sharp. Preserve the person from the photo exactly: face, proportions, skin (with natural pores and subtle shadows), hair, and clothes. The image must look like one coherent, high-resolution photograph: the same person in a bright, airy room by a big window, hyper-realistic, no over-smoothing or stylization. Return ONLY the image."
+    },
+    {
+      "name": "Окно 4",
+      "image": "4.jpg",
+      "prompt": "Place the person from this photo in an interior scene next to a window with warm, afternoon-style daylight—golden or soft white light coming through, possibly with light curtains or sheer fabric softening the light. The room feels lived-in: e.g. a sofa, a small table, a plant, or books—nothing cluttered, but cozy. The person keeps their exact appearance from the photo: same face, skin tone, body, hair, and clothing. Lighting on the person should be natural and dimensional: soft highlights and gentle shadows, realistic skin texture, hair with natural volume and strands, fabric with real folds. The final image must be a single, hyper-realistic photo of that person in this window setting—no plastic skin, no cartoon or illustrated look. Return ONLY the image."
+    },
+    {
+      "name": "Окно 5",
+      "image": "5.jpg",
+      "prompt": "Place the person from this photo by a window in a calm, minimalist interior. The window provides the main light: clear, natural daylight—either soft overcast or mild direct sun—creating a clean, flattering look on the person. Background: simple wall, maybe a slim frame or a single plant; the focus is on the person and the window light. Strictly preserve the person from the photo: identical face, skin (with natural fine texture and subtle wrinkles where appropriate), hair, and clothes. The result must look like one real photograph: same person, natural lighting, sharp where it matters, with realistic skin and fabric—no over-smoothing, no artificial or illustrated style. Return ONLY the image."
+    },
+    {
+      "name": "Окно 6",
+      "image": "6.jpg",
+      "prompt": "Place the person from this photo in a bright, window-lit setting: a room where a large or medium window is the key light source, filling the space with soft, natural daylight. The person may be standing or sitting near the window, with their face and body naturally lit. Keep the same person exactly: face, skin tone, body proportions, hair, and clothing from the photo. Render with hyper-realistic detail: natural skin texture and pores, realistic hair, clothing with natural folds and material feel. The image must read as a single, coherent photograph—the same person in a bright window environment, no plastic or cartoon look. Return ONLY the image."
+    }
   ]
 }

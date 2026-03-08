@@ -1154,7 +1154,7 @@
                         <span class="photo-insert-icon"></span>
                         <img id="ref-style-preview" class="photo-insert-preview" src="" alt="">
                     </div>
-                    <span id="ref-style-text" class="photo-insert-label">Загрузить референс (стиль) или Ctrl+V</span>
+                    <span id="ref-style-text" class="photo-insert-label">Референс: только 1 фото. Загрузить или Ctrl+V</span>
                 </div>
             </div>
             <button type="button" class="upload-clear-btn" id="ref-style-clear" onclick="clearUpload(event, 'ref-style')">
@@ -1181,14 +1181,14 @@
 
         <div id="ref-target-wrap" class="ref-target-wrap">
             <label class="mini-upload" onclick="setActivePasteTarget('ref-target')">
-                <input type="file" id="ref-target-file" class="file-input-overlay" accept="image/*" onchange="previewFile('ref-target-file', 'ref-target-preview')">
+                <input type="file" id="ref-target-file" class="file-input-overlay" accept="image/*" multiple onchange="previewFile('ref-target-file', 'ref-target-preview')">
                 <div class="photo-insert-card">
                     <div class="photo-insert-row">
                         <div class="photo-insert-icon-wrap" id="ref-target-icon-wrap">
                             <span class="photo-insert-icon"></span>
                             <img id="ref-target-preview" class="photo-insert-preview" src="" alt="">
                         </div>
-                        <span id="ref-target-text" class="photo-insert-label">Загрузить основное фото или Ctrl+V</span>
+                        <span id="ref-target-text" class="photo-insert-label">Основное фото: до 3 шт. Загрузить или Ctrl+V</span>
                     </div>
                 </div>
                 <button type="button" class="upload-clear-btn" id="ref-target-clear" onclick="clearUpload(event, 'ref-target')">
@@ -1206,6 +1206,7 @@
             <div class="result-image-wrap">
                 <img id="ref-img" class="result-single-img" src="" alt="">
             </div>
+            <div id="ref-images-grid" class="product-images-grid"></div>
         </div>
 
         <button id="btn-ref" class="main-btn" onclick="runGeneration('ref')">Сгенерировать</button>
@@ -1227,7 +1228,7 @@
                         <span class="photo-insert-icon"></span>
                         <img id="poses-preview" class="photo-insert-preview" src="" alt="">
                     </div>
-                    <span id="poses-text" class="photo-insert-label">Загрузите фото человека</span>
+                    <span id="poses-text" class="photo-insert-label">Только 1 фото человека. Загрузить или Ctrl+V</span>
                 </div>
             </div>
             <button type="button" class="upload-clear-btn" id="poses-clear" onclick="clearUpload(event, 'poses')">
@@ -1479,10 +1480,12 @@
 
         const MAX_PHOTOS = 3;
         const MAX_PHOTOS_POSES = 1;
-        let pastedFiles = { gen: null, product: null, poses: null, refStyle: null, refTarget: null };
+        /** Вставленные фото: gen/product/refTarget — массивы до 3; refStyle/poses — одно фото (null или File). */
+        let pastedFiles = { gen: [], product: [], poses: null, refStyle: null, refTarget: [] };
         /** Сохранённые файлы при выборе через диалог (на десктопе input.files может теряться) */
         let lastSelectedGenFiles = [];
         let lastSelectedProductFiles = [];
+        let lastSelectedRefTargetFiles = [];
         let refTemplateBase64 = null;
         let refTemplatePrompt = null;
         let refSourceMode = 'own';
@@ -1517,7 +1520,7 @@
             document.getElementById('ref-own-block').style.display = mode === 'own' ? 'block' : 'none';
             document.getElementById('ref-templates-block').style.display = mode === 'template' ? 'block' : 'none';
             const refTargetText = document.getElementById('ref-target-text');
-            if (refTargetText) refTargetText.innerText = mode === 'template' ? 'Загрузите ваше фото или Ctrl+V' : 'Загрузить основное фото или Ctrl+V';
+            if (refTargetText) refTargetText.innerText = mode === 'template' ? 'Загрузите до 3 фото или Ctrl+V' : 'Основное фото: до 3 шт. Загрузить или Ctrl+V';
             const listView = document.getElementById('ref-templates-list-view');
             const workspaceView = document.getElementById('ref-template-workspace-view');
             const refTargetWrap = document.getElementById('ref-target-wrap');
@@ -1556,7 +1559,7 @@
             const refStyleWrap = document.getElementById('ref-style-icon-wrap');
             if (refStyleWrap) { refStyleWrap.classList.remove('has-photo'); refStyleWrap.closest('.photo-insert-card')?.classList.remove('has-photo'); }
             document.getElementById('ref-style-preview').src = '';
-            document.getElementById('ref-style-text').innerText = 'Загрузить референс (стиль) или Ctrl+V';
+            document.getElementById('ref-style-text').innerText = 'Референс: только 1 фото. Загрузить или Ctrl+V';
             document.getElementById('ref-style-clear').classList.remove('visible');
             document.querySelectorAll('.ref-template-item').forEach(el => el.classList.remove('selected'));
             document.getElementById('ref-templates-list-view').style.display = 'block';
@@ -2083,54 +2086,40 @@
             const cd = e.clipboardData || (e.originalEvent && e.originalEvent.clipboardData);
             uiLog('paste:event', { hasClipboardData: !!cd });
 
-            let blob = null;
+            const blobs = [];
             if (cd && cd.items && cd.items.length) {
-                const types = [];
-                for (let i = 0; i < cd.items.length; i++) {
-                    types.push(cd.items[i].type);
+                for (let i = 0; i < cd.items.length && blobs.length < MAX_PHOTOS; i++) {
                     if (cd.items[i].type.indexOf("image") === 0) {
-                        blob = cd.items[i].getAsFile();
-                        break;
+                        const file = cd.items[i].getAsFile();
+                        if (file) blobs.push(file);
                     }
                 }
-                uiLog('paste:items', { types });
+                uiLog('paste:items', { count: blobs.length });
+            }
+            if (blobs.length === 0 && cd && cd.files && cd.files.length) {
+                for (let i = 0; i < cd.files.length && blobs.length < MAX_PHOTOS; i++) {
+                    const file = cd.files[i];
+                    if (file.type && file.type.indexOf('image') === 0) blobs.push(file);
+                }
+                if (blobs.length) uiLog('paste:fallbackFiles', { count: blobs.length });
             }
 
-            // Fallback: некоторые клиенты кладут изображение только в files
-            if (!blob && cd && cd.files && cd.files.length) {
-                const file = cd.files[0];
-                if (file.type && file.type.indexOf('image') === 0) {
-                    blob = file;
-                    uiLog('paste:fallbackFile', { type: file.type, size: file.size });
+            if (blobs.length > 0) {
+                const targetPaste = activePasteTarget || (document.getElementById('gen-screen').classList.contains('active') ? 'gen' : document.getElementById('product-screen').classList.contains('active') ? 'product' : document.getElementById('poses-screen').classList.contains('active') ? 'poses' : null);
+                const refActive = document.getElementById('ref-screen').classList.contains('active');
+                const hasStyle = !!pastedFiles.refStyle || !!refTemplateBase64 || !!document.getElementById('ref-style-preview').src;
+                const hasTarget = (Array.isArray(pastedFiles.refTarget) && pastedFiles.refTarget.length) || document.getElementById('ref-target-preview').src;
+                const refTarget = refActive && !targetPaste ? (!hasStyle ? 'ref-style' : (!hasTarget ? 'ref-target' : 'ref-style')) : null;
+                const pasteTarget = targetPaste || (refActive ? refTarget : null) || 'gen';
+                if (pasteTarget === 'ref-style' || pasteTarget === 'poses') {
+                    handlePastedImage(blobs[0], pasteTarget);
+                } else {
+                    handlePastedImage(blobs.slice(0, MAX_PHOTOS), pasteTarget);
                 }
-            }
-
-            if (blob) {
-                // Если пользователь явно кликнул по зоне — уважаем выбор
-                if (activePasteTarget) {
-                    handlePastedImage(blob, activePasteTarget);
-                    uiLog('paste:handledByActiveTarget', { target: activePasteTarget });
-                    return;
-                }
-                // Иначе — по активному экрану, но аккуратнее для экрана референсов
-                if (document.getElementById('gen-screen').classList.contains('active')) {
-                    handlePastedImage(blob, 'gen');
-                } else if (document.getElementById('product-screen').classList.contains('active')) {
-                    handlePastedImage(blob, 'product');
-                } else if (document.getElementById('poses-screen').classList.contains('active')) {
-                    handlePastedImage(blob, 'poses');
-                } else if (document.getElementById('ref-screen').classList.contains('active')) {
-                    // Если стиль ещё не задан — вставляем туда, иначе в основное фото
-                    const hasStyle = !!pastedFiles.refStyle || !!refTemplateBase64 || !!document.getElementById('ref-style-preview').src;
-                    const hasTarget = !!pastedFiles.refTarget || !!document.getElementById('ref-target-preview').src;
-                    const target = !hasStyle ? 'ref-style' : (!hasTarget ? 'ref-target' : 'ref-style');
-                    handlePastedImage(blob, target);
-                    uiLog('paste:ref-autoTarget', { target, hasStyle, hasTarget });
-                }
+                uiLog('paste:handledByActiveTarget', { target: pasteTarget, count: blobs.length });
             } else {
                 uiLog('paste:noImageFound', { hasClipboardData: !!cd });
             }
-            uiLog('paste:done', { handled: !!blob });
         });
 
         function clearUpload(event, id) {
@@ -2138,7 +2127,7 @@
             uiLog('clearUpload', { id });
             if (id === 'gen') {
                 document.getElementById('gen-file').value = '';
-                pastedFiles.gen = null;
+                pastedFiles.gen = [];
                 lastSelectedGenFiles = [];
                 const genWrap = document.getElementById('gen-icon-wrap');
                 if (genWrap) { genWrap.classList.remove('has-photo'); genWrap.closest('.photo-insert-card')?.classList.remove('has-photo'); }
@@ -2147,7 +2136,7 @@
                 document.getElementById('gen-clear').classList.remove('visible');
             } else if (id === 'product') {
                 document.getElementById('product-file').value = '';
-                pastedFiles.product = null;
+                pastedFiles.product = [];
                 lastSelectedProductFiles = [];
                 const productWrap = document.getElementById('product-icon-wrap');
                 if (productWrap) { productWrap.classList.remove('has-photo'); productWrap.closest('.photo-insert-card')?.classList.remove('has-photo'); }
@@ -2160,7 +2149,7 @@
                 const posesWrap = document.getElementById('poses-icon-wrap');
                 if (posesWrap) { posesWrap.classList.remove('has-photo'); posesWrap.closest('.photo-insert-card')?.classList.remove('has-photo'); }
                 document.getElementById('poses-preview').src = '';
-                document.getElementById('poses-text').innerText = 'Загрузите фото человека';
+                document.getElementById('poses-text').innerText = 'Только 1 фото человека. Загрузить или Ctrl+V';
                 document.getElementById('poses-clear').classList.remove('visible');
             } else if (id === 'ref-style') {
                 document.getElementById('ref-style-file').value = '';
@@ -2172,7 +2161,7 @@
                 const refStyleWrap = document.getElementById('ref-style-icon-wrap');
                 if (refStyleWrap) { refStyleWrap.classList.remove('has-photo'); refStyleWrap.closest('.photo-insert-card')?.classList.remove('has-photo'); }
                 document.getElementById('ref-style-preview').src = '';
-                document.getElementById('ref-style-text').innerText = 'Загрузить референс (стиль) или Ctrl+V';
+                document.getElementById('ref-style-text').innerText = 'Референс: только 1 фото. Загрузить или Ctrl+V';
                 document.getElementById('ref-style-clear').classList.remove('visible');
                 if (refSourceMode === 'template') {
                     document.getElementById('ref-target-wrap').style.display = 'none';
@@ -2181,28 +2170,36 @@
                 }
             } else if (id === 'ref-target') {
                 document.getElementById('ref-target-file').value = '';
-                pastedFiles.refTarget = null;
+                pastedFiles.refTarget = [];
+                lastSelectedRefTargetFiles = [];
                 const refTargetWrap = document.getElementById('ref-target-icon-wrap');
                 if (refTargetWrap) { refTargetWrap.classList.remove('has-photo'); refTargetWrap.closest('.photo-insert-card')?.classList.remove('has-photo'); }
                 document.getElementById('ref-target-preview').src = '';
-                document.getElementById('ref-target-text').innerText = refSourceMode === 'template' ? 'Загрузите ваше фото или Ctrl+V' : 'Загрузить основное фото или Ctrl+V';
+                document.getElementById('ref-target-text').innerText = refSourceMode === 'template' ? 'Загрузите до 3 фото или Ctrl+V' : 'Основное фото: до 3 шт. Загрузить или Ctrl+V';
                 document.getElementById('ref-target-clear').classList.remove('visible');
             }
         }
 
-        function handlePastedImage(file, type) {
-            uiLog('handlePastedImage', { type, size: file.size, mime: file.type });
-            if (!isAllowedImageType(file)) {
-                uiLog('handlePastedImage:unsupportedType', { type: file.type });
+        function handlePastedImage(fileOrFiles, type) {
+            const typeKey = type === 'ref-style' ? 'refStyle' : type === 'ref-target' ? 'refTarget' : type;
+            const isMulti = type === 'gen' || type === 'product' || type === 'ref-target';
+            const files = Array.isArray(fileOrFiles) ? fileOrFiles : [fileOrFiles];
+            const valid = files.filter(f => f && isAllowedImageType(f));
+            if (valid.length === 0) {
+                if (files.length && files[0]) uiLog('handlePastedImage:unsupportedType', { type: files[0].type });
                 return;
             }
-            pastedFiles[type] = file;
+            if (isMulti) {
+                pastedFiles[typeKey] = (pastedFiles[typeKey] || []).concat(valid).slice(0, MAX_PHOTOS);
+            } else {
+                pastedFiles[typeKey] = valid[0];
+            }
+            const first = isMulti ? pastedFiles[typeKey][0] : pastedFiles[typeKey];
             const reader = new FileReader();
             reader.onload = (e) => {
                 const imgIds = { gen: 'gen-preview', product: 'product-preview', poses: 'poses-preview', refStyle: 'ref-style-preview', refTarget: 'ref-target-preview' };
                 const labelIds = { gen: 'gen-file-text', product: 'product-text', poses: 'poses-text', refStyle: 'ref-style-text', refTarget: 'ref-target-text' };
                 const clearIds = { gen: 'gen-clear', product: 'product-clear', poses: 'poses-clear', refStyle: 'ref-style-clear', refTarget: 'ref-target-clear' };
-                const typeKey = type === 'ref-style' ? 'refStyle' : type === 'ref-target' ? 'refTarget' : type;
                 const img = document.getElementById(imgIds[typeKey]);
                 if (img) {
                     img.src = e.target.result;
@@ -2211,13 +2208,14 @@
                     if (wrap) wrap.classList.add('has-photo');
                     if (card) card.classList.add('has-photo');
                     const label = document.getElementById(labelIds[typeKey]);
-                    if (label) label.innerText = 'Фото принято';
+                    const n = isMulti ? pastedFiles[typeKey].length : 1;
+                    if (label) label.innerText = n > 1 ? 'Добавлено ' + n + ' фото' : 'Фото принято';
                     const clearBtn = document.getElementById(clearIds[typeKey]);
                     if (clearBtn) clearBtn.classList.add('visible');
                 }
             };
-            reader.readAsDataURL(file);
-            tg.HapticFeedback.notificationOccurred('selection');
+            reader.readAsDataURL(first);
+            if (typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('selection');
         }
 
         function previewFile(inputId, imgId) {
@@ -2227,10 +2225,15 @@
             const isPoses = inputId === 'poses-file';
             const isGen = inputId === 'gen-file';
             const isProduct = inputId === 'product-file';
+            const isRefStyle = inputId === 'ref-style-file';
+            const isRefTarget = inputId === 'ref-target-file';
             if (isPoses && files.length > 1) {
                 showPhotoLimitWarning(MAX_PHOTOS_POSES, true);
             }
-            if ((isGen || isProduct) && files.length > MAX_PHOTOS) {
+            if (isRefStyle && files.length > 1) {
+                showInfoToast('В референс можно загрузить только 1 фото. Будет использовано первое.');
+            }
+            if ((isGen || isProduct || isRefTarget) && files.length > MAX_PHOTOS) {
                 showPhotoLimitWarning(MAX_PHOTOS, false);
             }
             const file = files[0];
@@ -2240,17 +2243,20 @@
                 input.value = '';
                 return;
             }
-            if(inputId === 'gen-file') {
-                pastedFiles.gen = null;
+            if (inputId === 'gen-file') {
+                pastedFiles.gen = [];
                 lastSelectedGenFiles = Array.from(files).filter(function(f) { return isAllowedImageType(f); }).slice(0, MAX_PHOTOS);
             }
-            if(inputId === 'product-file') {
-                pastedFiles.product = null;
+            if (inputId === 'product-file') {
+                pastedFiles.product = [];
                 lastSelectedProductFiles = Array.from(files).filter(function(f) { return isAllowedImageType(f); }).slice(0, MAX_PHOTOS);
             }
-            if(inputId === 'poses-file') pastedFiles.poses = null;
-            if(inputId === 'ref-style-file') pastedFiles.refStyle = null;
-            if(inputId === 'ref-target-file') pastedFiles.refTarget = null;
+            if (inputId === 'poses-file') pastedFiles.poses = null;
+            if (inputId === 'ref-style-file') { pastedFiles.refStyle = files[0]; }
+            if (inputId === 'ref-target-file') {
+                pastedFiles.refTarget = [];
+                lastSelectedRefTargetFiles = Array.from(files).filter(function(f) { return isAllowedImageType(f); }).slice(0, MAX_PHOTOS);
+            }
 
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -2262,7 +2268,7 @@
                 if (card) card.classList.add('has-photo');
                 const labelId = { 'gen-preview': 'gen-file-text', 'product-preview': 'product-text', 'poses-preview': 'poses-text', 'ref-style-preview': 'ref-style-text', 'ref-target-preview': 'ref-target-text' }[imgId];
                 if (labelId) {
-                    const n = (inputId === 'gen-file' ? lastSelectedGenFiles : inputId === 'product-file' ? lastSelectedProductFiles : []).length;
+                    const n = inputId === 'gen-file' ? lastSelectedGenFiles.length : inputId === 'product-file' ? lastSelectedProductFiles.length : (inputId === 'ref-target-file' ? lastSelectedRefTargetFiles.length : 1);
                     document.getElementById(labelId).innerText = n > 1 ? 'Выбрано ' + n + ' фото' : 'Фото принято';
                 }
                 const clearId = { 'gen-preview': 'gen-clear', 'product-preview': 'product-clear', 'poses-preview': 'poses-clear', 'ref-style-preview': 'ref-style-clear', 'ref-target-preview': 'ref-target-clear' }[imgId];
@@ -2283,7 +2289,7 @@
                 imgRes = document.getElementById('gen-img');
                 container = document.getElementById('gen-result-area');
                 apiUrl = '/api/generate';
-                const genFiles = (lastSelectedGenFiles.length ? lastSelectedGenFiles : (fileInput.files.length ? Array.from(fileInput.files) : (pastedFiles.gen ? [pastedFiles.gen] : [])));
+                const genFiles = (lastSelectedGenFiles.length ? lastSelectedGenFiles : (fileInput.files.length ? Array.from(fileInput.files) : (Array.isArray(pastedFiles.gen) && pastedFiles.gen.length ? pastedFiles.gen : [])));
                 const genFilesTrimmed = genFiles.slice(0, MAX_PHOTOS);
                 uiLog('runGeneration:text:init', {
                     hasPrompt: !!prompt,
@@ -2308,7 +2314,7 @@
                 btn = document.getElementById('btn-product');
                 container = document.getElementById('product-result-area');
                 apiUrl = '/api/product-gen-image';
-                const productFiles = (lastSelectedProductFiles.length ? lastSelectedProductFiles : (fileInput.files.length ? Array.from(fileInput.files) : (pastedFiles.product ? [pastedFiles.product] : [])));
+                const productFiles = (lastSelectedProductFiles.length ? lastSelectedProductFiles : (fileInput.files.length ? Array.from(fileInput.files) : (Array.isArray(pastedFiles.product) && pastedFiles.product.length ? pastedFiles.product : [])));
                 const productFilesTrimmed = productFiles.slice(0, MAX_PHOTOS);
                 uiLog('runGeneration:product:init', {
                     hasPrompt: !!prompt,
@@ -2337,7 +2343,7 @@
                 container = document.getElementById('ref-result-area');
                 apiUrl = '/api/generate-refpair';
                 const refFile = styleInput.files[0] || pastedFiles.refStyle;
-                const targetFile = targetInput.files[0] || pastedFiles.refTarget;
+                const targetFiles = (lastSelectedRefTargetFiles.length ? lastSelectedRefTargetFiles : (targetInput.files.length ? Array.from(targetInput.files) : (Array.isArray(pastedFiles.refTarget) && pastedFiles.refTarget.length ? pastedFiles.refTarget : []))).slice(0, MAX_PHOTOS);
                 const isTemplateMode = refSourceMode === 'template';
                 if (isTemplateMode) {
                     prompt = 'Перенеси стиль и композицию референса на это фото, сохрани человека или объект узнаваемым.';
@@ -2349,7 +2355,7 @@
                     hasPrompt: !!prompt,
                     hasRefFile: !!refFile,
                     hasRefTemplate: !!refTemplateBase64,
-                    hasTargetFile: !!targetFile
+                    targetCount: targetFiles.length
                 });
 
                 if (!refFile && !refTemplateBase64) {
@@ -2362,11 +2368,11 @@
                         showErrorToast('Выберите шаблон.');
                         return;
                     }
-                    if (!targetFile) {
+                    if (!targetFiles.length) {
                         showErrorToast('Загрузите ваше фото.');
                         return;
                     }
-                    const targetBase64 = await toBase64(targetFile);
+                    const targetBase64 = await toBase64(targetFiles[0]);
                     bodyData = { templateMode: true, templatePrompt: refTemplatePrompt, initData: tg.initData, imagesBase64: [targetBase64] };
                 } else {
                     if (!prompt) {
@@ -2376,9 +2382,12 @@
                     }
                     const refBase64 = await toBase64(refFile);
                     uiLog('runGeneration:ref:refBase64Ready', { length: refBase64.length });
-                    if (targetFile) {
-                        const targetBase64 = await toBase64(targetFile);
+                    if (targetFiles.length === 1) {
+                        const targetBase64 = await toBase64(targetFiles[0]);
                         bodyData = { prompt, initData: tg.initData, refImageBase64: refBase64, targetImageBase64: targetBase64 };
+                    } else if (targetFiles.length > 1) {
+                        const targetImagesBase64 = await Promise.all(targetFiles.map(f => toBase64(f)));
+                        bodyData = { prompt, initData: tg.initData, refImageBase64: refBase64, targetImagesBase64 };
                     } else {
                         bodyData = { prompt, initData: tg.initData, refImageBase64: refBase64 };
                     }
@@ -2435,6 +2444,8 @@
             if (gridProduct) { gridProduct.innerHTML = ''; gridProduct.classList.remove('visible'); }
             const gridPoses = document.getElementById('poses-images-grid');
             if (gridPoses) { gridPoses.innerHTML = ''; gridPoses.classList.remove('visible'); }
+            const refGrid = document.getElementById('ref-images-grid');
+            if (refGrid) { refGrid.innerHTML = ''; refGrid.classList.remove('visible'); }
             container.classList.remove('has-result');
             container.querySelector('.placeholder-text').style.display = 'flex';
 
@@ -2518,12 +2529,27 @@
                     if (data.sentToChat) {
                         showInfoToast('Готово! Все фото также отправлены в чат с ботом отдельными файлами — вы всегда найдёте их там.');
                     }
+                } else if (type === 'ref' && data.imageUrls && data.imageUrls.length) {
+                    const refGrid = document.getElementById('ref-images-grid');
+                    if (refGrid) {
+                        refGrid.innerHTML = data.imageUrls.map(url => `<img src="${url}" alt="">`).join('');
+                        refGrid.classList.add('visible');
+                    }
+                    if (imgRes) imgRes.style.display = 'none';
+                    container.classList.add('has-result');
+                    container.querySelector('.placeholder-text').style.display = 'none';
+                    if (typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+                    if (data.sentToChat) {
+                        showInfoToast('Готово! Все фото также отправлены в чат с ботом.');
+                    }
                 } else if ((type === 'text' || type === 'ref') && data.imageUrl) {
+                    const refGrid = document.getElementById('ref-images-grid');
+                    if (refGrid) { refGrid.innerHTML = ''; refGrid.classList.remove('visible'); }
                     imgRes.src = data.imageUrl;
                     imgRes.style.display = 'block';
                     container.classList.add('has-result');
                     container.querySelector('.placeholder-text').style.display = 'none';
-                    tg.HapticFeedback.notificationOccurred('success');
+                    if (typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
                     if (data.sentToChat) {
                         showInfoToast('Готово! Фото также отправлено в чат с ботом файлом — вы всегда найдёте его там.');
                     }

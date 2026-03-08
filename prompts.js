@@ -75,10 +75,10 @@ const PROMPT_PRODUCT =
     (MODES.product && MODES.product.prompt) ||
     'Place this product photo into a professional, hyper‑realistic product photography scene. Environment and style: "%s". Keep the product clearly visible and well-lit, with sharp details, realistic reflections and shadows, visible surface texture and tiny imperfections (micro-scratches, fingerprints, fabric fibers). Do NOT over-smooth or cartoonize. Return ONLY the image.';
 
-/** Случайные позы: одно фото человека + пожелания. %s = userPrompt (включая количество поз и стили). */
+/** Случайные позы: одно фото человека + пожелания. %s = userPrompt. Спокойные, естественные позы — без прыжков и резких движений. */
 const PROMPT_POSES =
     (MODES.poses && MODES.poses.prompt) ||
-    'Using this person photo as identity reference, generate a NEW pose according to these wishes: "%s". Keep the same person, facial features, skin tone, clothing style and overall look. Make the result an ultra high‑resolution, hyper‑realistic photograph with natural lighting, subtle skin wrinkles and pores, realistic hair strands and fabric folds with small imperfections. Do NOT over-smooth or stylize like illustration. Return ONLY the image.';
+    'Using this person photo as identity reference, generate a NEW pose that is calm and natural according to these wishes: "%s". Prefer relaxed poses: standing, sitting, or gentle leaning. Avoid dynamic, jumpy, athletic, or highly active poses—no running, jumping, or exaggerated motion. Keep the same person, facial features, skin tone, clothing style and overall look. Make the result an ultra high‑resolution, hyper‑realistic photograph with natural lighting, subtle skin textures and fabric folds. Do NOT over-smooth or stylize like illustration. Return ONLY the image.';
 
 /** Два фото: первое — референс (стиль/ракурс), второе — основное (человек/объект). %s = userPrompt */
 const PROMPT_REF_PAIR =
