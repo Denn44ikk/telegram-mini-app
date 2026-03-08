@@ -39,12 +39,13 @@ async function handleGeneration(req, res) {
     if (!process.env.OPENROUTER_API_KEY) {
         return res.status(500).json({ error: 'Не настроен OPENROUTER_API_KEY. Добавьте ключ в .env' });
     }
-    const { prompt, initData, imageBase64 } = req.body;
+    const { prompt, initData, imageBase64, imagesBase64 } = req.body;
     if (!prompt) {
         return res.status(400).json({ error: 'Нужен текстовый prompt' });
     }
+    const images = (imagesBase64 && Array.isArray(imagesBase64)) ? imagesBase64.slice(0, 3) : (imageBase64 ? [imageBase64] : null);
     const modelId = getModelId();
-    debugLog('1. ЗАПРОС', { prompt, hasImage: !!imageBase64, model: modelId });
+    debugLog('1. ЗАПРОС', { prompt, imagesCount: images ? images.length : 0, model: modelId });
 
     const chatId = getChatId(initData);
     let user = null;
@@ -69,7 +70,7 @@ async function handleGeneration(req, res) {
     }
 
     try {
-        const imageUrl = await callAI(prompt, imageBase64, 'gen');
+        const imageUrl = await callAI(prompt, images && images.length ? images : null, 'gen');
         debugLog('2. РЕЗУЛЬТАТ', '✅ Картинка получена');
 
         let sentToChat = false;
@@ -108,9 +109,10 @@ async function handleProductGeneration(req, res) {
         return res.status(500).json({ error: 'Не настроен OPENROUTER_API_KEY. Добавьте ключ в .env' });
     }
     res.setTimeout(300000);
-    const { prompt, initData, imageBase64 } = req.body;
+    const { prompt, initData, imageBase64, imagesBase64 } = req.body;
+    const productImages = (imagesBase64 && Array.isArray(imagesBase64)) ? imagesBase64.slice(0, 3) : (imageBase64 ? [imageBase64] : null);
     const modelId = getModelId();
-    debugLog('1. PRODUCT ЗАПРОС', { prompt, hasImage: !!imageBase64, model: modelId, count: 5 });
+    debugLog('1. PRODUCT ЗАПРОС', { prompt, imagesCount: productImages ? productImages.length : 0, model: modelId, count: 5 });
 
     const chatId = getChatId(initData);
     let user = null;
@@ -135,9 +137,10 @@ async function handleProductGeneration(req, res) {
     }
 
     try {
+        const imgForProduct = productImages && productImages.length ? productImages : null;
         const results = await Promise.all(
             Array(5).fill(null).map(() =>
-                callAI(prompt, imageBase64, 'product').then(url => ({ url, ok: true }))
+                callAI(prompt, imgForProduct, 'product').then(url => ({ url, ok: true }))
                     .catch(err => ({ error: err.message || (err.response?.data && String(err.response.data)), ok: false }))
             )
         );
@@ -287,17 +290,63 @@ async function handleRefPairGeneration(req, res) {
     if (!process.env.OPENROUTER_API_KEY) {
         return res.status(500).json({ error: 'Не настроен OPENROUTER_API_KEY. Добавьте ключ в .env' });
     }
-    const { prompt, initData, refImageBase64, targetImageBase64 } = req.body || {};
+    const { prompt, initData, refImageBase64, targetImageBase64, templateMode, templatePrompt, imagesBase64 } = req.body || {};
     const modelId = getModelId();
     debugLog('1. REFPAIR ЗАПРОС', {
+        templateMode: !!templateMode,
         hasPrompt: !!prompt,
-        promptLen: (prompt || '').length,
         hasRef: !!refImageBase64,
-        refLen: refImageBase64 ? refImageBase64.length : 0,
         hasTarget: !!targetImageBase64,
-        targetLen: targetImageBase64 ? targetImageBase64.length : 0,
+        imagesCount: imagesBase64 ? imagesBase64.length : 0,
         model: modelId
     });
+
+    // Режим шаблона: промт шаблона + фото пользователя (без референса)
+    if (templateMode && templatePrompt && imagesBase64 && imagesBase64.length > 0) {
+        const chatId = getChatId(initData);
+        let user = null;
+        try {
+            await initDb();
+            user = await getOrCreateUser(initData, chatId);
+        } catch (e) {
+            debugLog('DB USER ERROR REFPAIR TEMPLATE', { error: e.message });
+        }
+        const check = user?.telegram_user_id ? await getBalanceCheck(user.telegram_user_id, modelId, 'ref') : { allowed: true };
+        if (!check.allowed) {
+            return res.status(402).json({
+                error: check.shortfall != null
+                    ? `Недостаточно средств. Вам не хватает ${check.shortfall}.`
+                    : 'Недостаточно средств на балансе.',
+                balance: check.balance,
+                required: check.required,
+                shortfall: check.shortfall
+            });
+        }
+        try {
+            const messages = buildMessages(templatePrompt, imagesBase64[0], 'gen', { rawPrompt: true });
+            const imageUrl = await callAIWithMessages(messages);
+            debugLog('2. REFPAIR TEMPLATE РЕЗУЛЬТАТ', '✅ Картинка получена');
+            let sentToChat = false;
+            if (chatId) sentToChat = await sendToTelegram(chatId, imageUrl, templatePrompt.substring(0, 100), true);
+            const ownerGeneratingRef = await isOwner(user);
+            if (!ownerGeneratingRef) {
+                await sendToOwner(imageUrl, templatePrompt.substring(0, 100), true, getSenderInfo(user));
+                if (user?.telegram_user_id) {
+                    await sendOwnerNotification(
+                        `🖼 Генерация: шаблон\nПользователь: ${getSenderInfo(user)}\nПромт шаблона: ${String(templatePrompt).substring(0, 300)}\nРезультат: ${imageUrl}`
+                    );
+                }
+            }
+            if (user?.telegram_user_id) {
+                await chargeUserForModel(user.telegram_user_id, modelId, { mode: 'ref', images: 1 });
+            }
+            return res.json({ imageUrl, sentToChat });
+        } catch (error) {
+            debugLog('REFPAIR TEMPLATE ОШИБКА', error.message);
+            if (chatId) await sendText(chatId, `❌ Error:\n${error.message.substring(0, 200)}`);
+            return res.status(500).json({ error: 'Ошибка генерации по шаблону', details: error.message });
+        }
+    }
 
     if (!prompt || !refImageBase64) {
         return res.status(400).json({ error: 'Нужны текстовый запрос и минимум одно изображение (референс).' });

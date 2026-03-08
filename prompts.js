@@ -94,35 +94,52 @@ function applyPrompt(template, userPrompt) {
 
 /**
  * Собирает сообщения для API. mode: 'gen' | 'product' | 'poses'.
- * gen — экран «Фото по промту» (с картинкой или без).
- * product — экран «Фотосессия с продуктом» (всегда с картинкой продукта).
+ * opts.rawPrompt === true: использовать userPrompt как готовый текст (для шаблонов).
  */
-function buildMessages(userPrompt, imageBase64, mode) {
+function buildMessages(userPrompt, imageBase64, mode, opts) {
     mode = mode || 'gen';
+    opts = opts || {};
     const messages = [
         { role: "system", content: SYSTEM_PROMPT }
     ];
 
     if (imageBase64) {
+        const arr = Array.isArray(imageBase64) ? imageBase64 : [imageBase64];
+        return buildMessagesWithImages(userPrompt, arr, mode, messages, opts);
+    } else {
+        // Только для mode === 'gen' (фото по промту без референса)
+        const text = opts.rawPrompt ? userPrompt : applyPrompt(PROMPT_GEN_TEXT, userPrompt);
+        messages.push({ role: "user", content: text });
+    }
+
+    return messages;
+}
+
+/**
+ * Собирает сообщения с несколькими изображениями (до 3). mode: 'gen' | 'product' | 'poses'.
+ * opts.rawPrompt === true: текст как есть (шаблон).
+ */
+function buildMessagesWithImages(userPrompt, imagesBase64, mode, messagesOut, opts) {
+    opts = opts || {};
+    const messages = messagesOut || [{ role: "system", content: SYSTEM_PROMPT }];
+    if (!imagesBase64 || imagesBase64.length === 0) return buildMessages(userPrompt, null, mode, opts);
+
+    let text;
+    if (opts.rawPrompt) {
+        text = userPrompt;
+    } else {
         let textTemplate;
         if (mode === 'product') textTemplate = PROMPT_PRODUCT;
         else if (mode === 'poses') textTemplate = PROMPT_POSES;
         else textTemplate = PROMPT_GEN_WITH_IMAGE;
-
-        const text = applyPrompt(textTemplate, userPrompt);
-        messages.push({
-            role: "user",
-            content: [
-                { type: "text", text },
-                { type: "image_url", image_url: { url: imageBase64 } }
-            ]
-        });
-    } else {
-        // Только для mode === 'gen' (фото по промту без референса)
-        const text = applyPrompt(PROMPT_GEN_TEXT, userPrompt);
-        messages.push({ role: "user", content: text });
+        text = applyPrompt(textTemplate, userPrompt);
     }
-
+    const content = [{ type: "text", text }];
+    const maxImages = 3;
+    for (let i = 0; i < Math.min(imagesBase64.length, maxImages); i++) {
+        content.push({ type: "image_url", image_url: { url: imagesBase64[i] } });
+    }
+    messages.push({ role: "user", content });
     return messages;
 }
 
@@ -150,6 +167,7 @@ function buildRefPairMessages(userPrompt, refImageBase64, targetImageBase64) {
 
 module.exports = {
     buildMessages,
+    buildMessagesWithImages,
     buildRefPairMessages,
     getModelId,
     setModelId,

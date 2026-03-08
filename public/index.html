@@ -706,12 +706,14 @@
         }
         .ref-templates-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
         }
         .ref-template-item {
+            position: relative;
             aspect-ratio: 1;
-            border-radius: 12px;
+            min-height: 140px;
+            border-radius: 14px;
             border: 2px solid rgba(255,255,255,.2);
             background: rgba(255,255,255,.08);
             cursor: pointer;
@@ -726,6 +728,17 @@
             height: 100%;
             object-fit: cover;
             display: block;
+        }
+        .ref-template-item .ref-template-name {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 8px;
+            background: linear-gradient(transparent, rgba(0,0,0,.75));
+            color: #fff;
+            font-size: 13px;
+            font-weight: 600;
         }
         .ref-template-chosen {
             margin-bottom: 16px;
@@ -1026,14 +1039,14 @@
         </div>
 
         <label id="gen-drop-zone" class="upload-area" onclick="setActivePasteTarget('gen')">
-            <input type="file" id="gen-file" accept="image/*" style="display:none" onchange="previewFile('gen-file', 'gen-preview')">
+            <input type="file" id="gen-file" accept="image/*" multiple style="display:none" onchange="previewFile('gen-file', 'gen-preview')">
             <div class="photo-insert-card">
                 <div class="photo-insert-row">
                     <div class="photo-insert-icon-wrap" id="gen-icon-wrap">
                         <span class="photo-insert-icon"></span>
                         <img id="gen-preview" class="photo-insert-preview" src="" alt="">
                     </div>
-                    <span id="gen-file-text" class="photo-insert-label">Загрузить или вставить (Ctrl+V)</span>
+                    <span id="gen-file-text" class="photo-insert-label">Загрузить до 3 фото или вставить (Ctrl+V)</span>
                 </div>
             </div>
             <button type="button" class="upload-clear-btn" id="gen-clear" onclick="clearUpload(event, 'gen')">
@@ -1064,14 +1077,14 @@
         </div>
 
         <label id="product-drop-zone" class="upload-area" onclick="setActivePasteTarget('product')">
-            <input type="file" id="product-file" accept="image/*" style="display:none" onchange="previewFile('product-file', 'product-preview')">
+            <input type="file" id="product-file" accept="image/*" multiple style="display:none" onchange="previewFile('product-file', 'product-preview')">
             <div class="photo-insert-card">
                 <div class="photo-insert-row">
                     <div class="photo-insert-icon-wrap" id="product-icon-wrap">
                         <span class="photo-insert-icon"></span>
                         <img id="product-preview" class="photo-insert-preview" src="" alt="">
                     </div>
-                    <span id="product-text" class="photo-insert-label">Загрузить или вставить (Ctrl+V)</span>
+                    <span id="product-text" class="photo-insert-label">Загрузить до 3 фото или вставить (Ctrl+V)</span>
                 </div>
             </div>
             <button type="button" class="upload-clear-btn" id="product-clear" onclick="clearUpload(event, 'product')">
@@ -1136,7 +1149,7 @@
 
         <div id="ref-templates-block" class="ref-source-panel" style="display: none;">
             <div id="ref-templates-list-view">
-                <p class="ref-templates-title">Выберите шаблон — референс для стиля</p>
+                <p class="ref-templates-title">Выберите шаблон — загрузите своё фото, к нему применится выбранный сценарий</p>
                 <div id="ref-templates-grid" class="ref-templates-grid"></div>
             </div>
             <div id="ref-template-workspace-view" style="display: none;">
@@ -1403,9 +1416,26 @@
             msgEl.textContent = message || '';
             toast.classList.add('visible');
             if (window.__errorToastTimer) clearTimeout(window.__errorToastTimer);
-            window.__errorToastTimer = setTimeout(() => {
-                toast.classList.remove('visible');
-            }, 5000);
+            window.__errorToastTimer = setTimeout(() => { toast.classList.remove('visible'); }, 5000);
+        }
+
+        /** Всплывающее предупреждение о лимите фото */
+        function showPhotoLimitWarning(maxAllowed, isPoses) {
+            const msg = isPoses
+                ? 'В генерации поз можно загрузить только 1 фото. Будет использовано первое.'
+                : 'Можно загрузить не более ' + maxAllowed + ' фото. Будут использованы первые ' + maxAllowed + '.';
+            const toast = document.getElementById('error-toast');
+            const msgEl = document.getElementById('error-toast-message');
+            const titleEl = document.getElementById('error-toast-title');
+            if (toast && msgEl) {
+                toast.classList.remove('error');
+                toast.classList.add('info');
+                if (titleEl) titleEl.textContent = 'Внимание';
+                msgEl.textContent = msg;
+                toast.classList.add('visible');
+                if (window.__errorToastTimer) clearTimeout(window.__errorToastTimer);
+                window.__errorToastTimer = setTimeout(() => { toast.classList.remove('visible'); }, 5000);
+            } else if (tg && tg.showAlert) tg.showAlert(msg);
         }
 
         function hideErrorToast() {
@@ -1431,20 +1461,23 @@
             return true;
         }
 
+        const MAX_PHOTOS = 3;
+        const MAX_PHOTOS_POSES = 1;
         let pastedFiles = { gen: null, product: null, poses: null, refStyle: null, refTarget: null };
         let refTemplateBase64 = null;
+        let refTemplatePrompt = null;
         let refSourceMode = 'own';
         let activePasteTarget = null;
         let termsAccepted = true;
 
         /** Шаблоны по умолчанию (SVG), если нет ref-templates.json или он пустой */
         const REF_TEMPLATES_FALLBACK = [
-            { name: 'Окно 1', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#87CEEB" stroke="#2a4a6a" stroke-width="3"/><line x1="50" y1="0" x2="50" y2="100" stroke="#2a4a6a" stroke-width="2"/><line x1="0" y1="50" x2="100" y2="50" stroke="#2a4a6a" stroke-width="2"/></svg>' },
-            { name: 'Окно 2', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#B0E0E6" stroke="#3d6b8a" stroke-width="2"/><rect x="5" y="5" width="40" height="40" fill="none" stroke="#3d6b8a" stroke-width="1.5"/><rect x="55" y="5" width="40" height="40" fill="none" stroke="#3d6b8a" stroke-width="1.5"/><rect x="5" y="55" width="40" height="40" fill="none" stroke="#3d6b8a" stroke-width="1.5"/><rect x="55" y="55" width="40" height="40" fill="none" stroke="#3d6b8a" stroke-width="1.5"/></svg>' },
-            { name: 'Окно 3', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#E0F4FF" stroke="#1e3a5f" stroke-width="2"/><line x1="33.33" y1="0" x2="33.33" y2="100" stroke="#1e3a5f" stroke-width="1.5"/><line x1="66.66" y1="0" x2="66.66" y2="100" stroke="#1e3a5f" stroke-width="1.5"/><line x1="0" y1="33.33" x2="100" y2="33.33" stroke="#1e3a5f" stroke-width="1.5"/><line x1="0" y1="66.66" x2="100" y2="66.66" stroke="#1e3a5f" stroke-width="1.5"/></svg>' },
-            { name: 'Окно 4', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#ADD8E6" stroke="#2c5282" stroke-width="2"/><rect x="10" y="10" width="80" height="80" fill="none" stroke="#2c5282" stroke-width="2"/><line x1="50" y1="10" x2="50" y2="90" stroke="#2c5282" stroke-width="1.5"/><line x1="10" y1="50" x2="90" y2="50" stroke="#2c5282" stroke-width="1.5"/></svg>' },
-            { name: 'Окно 5', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#AFEEEE" stroke="#285e61" stroke-width="2"/><line x1="0" y1="0" x2="100" y2="100" stroke="#285e61" stroke-width="1.5"/><line x1="100" y1="0" x2="0" y2="100" stroke="#285e61" stroke-width="1.5"/><circle cx="50" cy="50" r="8" fill="none" stroke="#285e61" stroke-width="1.5"/></svg>' },
-            { name: 'Окно 6', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#B8D4E3" stroke="#1a365d" stroke-width="2"/><rect x="15" y="15" width="32" height="32" fill="none" stroke="#1a365d" stroke-width="1.5"/><rect x="53" y="15" width="32" height="32" fill="none" stroke="#1a365d" stroke-width="1.5"/><rect x="15" y="53" width="32" height="32" fill="none" stroke="#1a365d" stroke-width="1.5"/><rect x="53" y="53" width="32" height="32" fill="none" stroke="#1a365d" stroke-width="1.5"/></svg>' }
+            { name: 'Окно 1', prompt: 'Place the person from this photo by a bright window. Return ONLY the image.', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#87CEEB" stroke="#2a4a6a" stroke-width="3"/><line x1="50" y1="0" x2="50" y2="100" stroke="#2a4a6a" stroke-width="2"/><line x1="0" y1="50" x2="100" y2="50" stroke="#2a4a6a" stroke-width="2"/></svg>' },
+            { name: 'Окно 2', prompt: 'Place the person from this photo by a window. Return ONLY the image.', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#B0E0E6" stroke="#3d6b8a" stroke-width="2"/><rect x="5" y="5" width="40" height="40" fill="none" stroke="#3d6b8a" stroke-width="1.5"/><rect x="55" y="5" width="40" height="40" fill="none" stroke="#3d6b8a" stroke-width="1.5"/><rect x="5" y="55" width="40" height="40" fill="none" stroke="#3d6b8a" stroke-width="1.5"/><rect x="55" y="55" width="40" height="40" fill="none" stroke="#3d6b8a" stroke-width="1.5"/></svg>' },
+            { name: 'Окно 3', prompt: 'Place the person from this photo by a window. Return ONLY the image.', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#E0F4FF" stroke="#1e3a5f" stroke-width="2"/><line x1="33.33" y1="0" x2="33.33" y2="100" stroke="#1e3a5f" stroke-width="1.5"/><line x1="66.66" y1="0" x2="66.66" y2="100" stroke="#1e3a5f" stroke-width="1.5"/><line x1="0" y1="33.33" x2="100" y2="33.33" stroke="#1e3a5f" stroke-width="1.5"/><line x1="0" y1="66.66" x2="100" y2="66.66" stroke="#1e3a5f" stroke-width="1.5"/></svg>' },
+            { name: 'Окно 4', prompt: 'Place the person from this photo by a window. Return ONLY the image.', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#ADD8E6" stroke="#2c5282" stroke-width="2"/><rect x="10" y="10" width="80" height="80" fill="none" stroke="#2c5282" stroke-width="2"/><line x1="50" y1="10" x2="50" y2="90" stroke="#2c5282" stroke-width="1.5"/><line x1="10" y1="50" x2="90" y2="50" stroke="#2c5282" stroke-width="1.5"/></svg>' },
+            { name: 'Окно 5', prompt: 'Place the person from this photo by a window. Return ONLY the image.', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#AFEEEE" stroke="#285e61" stroke-width="2"/><line x1="0" y1="0" x2="100" y2="100" stroke="#285e61" stroke-width="1.5"/><line x1="100" y1="0" x2="0" y2="100" stroke="#285e61" stroke-width="1.5"/><circle cx="50" cy="50" r="8" fill="none" stroke="#285e61" stroke-width="1.5"/></svg>' },
+            { name: 'Окно 6', prompt: 'Place the person from this photo by a window. Return ONLY the image.', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#B8D4E3" stroke="#1a365d" stroke-width="2"/><rect x="15" y="15" width="32" height="32" fill="none" stroke="#1a365d" stroke-width="1.5"/><rect x="53" y="15" width="32" height="32" fill="none" stroke="#1a365d" stroke-width="1.5"/><rect x="15" y="53" width="32" height="32" fill="none" stroke="#1a365d" stroke-width="1.5"/><rect x="53" y="53" width="32" height="32" fill="none" stroke="#1a365d" stroke-width="1.5"/></svg>' }
         ];
         let refTemplatesList = null;
         async function loadRefTemplates() {
@@ -1498,6 +1531,7 @@
 
         function refTemplateBackToList() {
             refTemplateBase64 = null;
+            refTemplatePrompt = null;
             pastedFiles.refStyle = null;
             document.getElementById('ref-style-file').value = '';
             const refStyleWrap = document.getElementById('ref-style-icon-wrap');
@@ -1514,8 +1548,9 @@
             tg.HapticFeedback && tg.HapticFeedback.selectionOccurred();
         }
 
-        function setRefTemplateChosen(dataUrl, name, item) {
+        function setRefTemplateChosen(dataUrl, name, templatePrompt, item) {
             refTemplateBase64 = dataUrl;
+            refTemplatePrompt = templatePrompt || null;
             pastedFiles.refStyle = null;
             document.getElementById('ref-style-file').value = '';
             document.getElementById('ref-style-preview').src = dataUrl;
@@ -1527,7 +1562,7 @@
             const chosenText = document.getElementById('ref-template-chosen-text');
             const chosenImg = document.getElementById('ref-template-chosen-img');
             if (chosenText && chosenImg) {
-                chosenText.textContent = 'Референс: ' + name;
+                chosenText.textContent = 'Шаблон: ' + name + ' — загрузите ваше фото';
                 chosenImg.src = dataUrl;
             }
             document.getElementById('ref-templates-list-view').style.display = 'none';
@@ -1546,12 +1581,13 @@
             list.forEach((t, i) => {
                 const isImage = !!t.image;
                 const imagePath = isImage && !t.image.includes('/') ? 'ref-templates/' + t.image : t.image;
-                const imgSrc = isImage ? ('/' + imagePath) : ('data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(t.svg))));
+                const imgSrc = isImage ? ('/' + imagePath) : ('data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(t.svg || ''))));
+                const prompt = t.prompt || 'Place the person from this photo in the scene. Return ONLY the image.';
                 const item = document.createElement('button');
                 item.type = 'button';
                 item.className = 'ref-template-item';
                 item.title = t.name;
-                item.innerHTML = '<img src="' + imgSrc + '" alt="' + t.name + '" loading="lazy">';
+                item.innerHTML = '<img src="' + imgSrc + '" alt="' + (t.name || '') + '" loading="lazy"><span class="ref-template-name">' + (t.name || '') + '</span>';
                 item.onclick = async () => {
                     let dataUrl = imgSrc;
                     if (isImage) {
@@ -1569,7 +1605,7 @@
                             return;
                         }
                     }
-                    setRefTemplateChosen(dataUrl, t.name, item);
+                    setRefTemplateChosen(dataUrl, t.name, prompt, item);
                 };
                 grid.appendChild(item);
             });
@@ -2164,21 +2200,32 @@
         }
 
         function previewFile(inputId, imgId) {
-            const file = document.getElementById(inputId).files[0];
-            if (file) {
-                uiLog('previewFile', { inputId, imgId, size: file.size, mime: file.type });
-                if (!isAllowedImageType(file)) {
-                    uiLog('previewFile:unsupportedType', { mime: file.type });
-                    document.getElementById(inputId).value = '';
-                    return;
-                }
-                if(inputId === 'gen-file') pastedFiles.gen = null;
-                if(inputId === 'product-file') pastedFiles.product = null;
-                if(inputId === 'poses-file') pastedFiles.poses = null;
-                if(inputId === 'ref-style-file') pastedFiles.refStyle = null;
-                if(inputId === 'ref-target-file') pastedFiles.refTarget = null;
+            const input = document.getElementById(inputId);
+            const files = input.files;
+            if (!files || files.length === 0) return;
+            const isPoses = inputId === 'poses-file';
+            const isGen = inputId === 'gen-file';
+            const isProduct = inputId === 'product-file';
+            if (isPoses && files.length > 1) {
+                showPhotoLimitWarning(MAX_PHOTOS_POSES, true);
+            }
+            if ((isGen || isProduct) && files.length > MAX_PHOTOS) {
+                showPhotoLimitWarning(MAX_PHOTOS, false);
+            }
+            const file = files[0];
+            uiLog('previewFile', { inputId, imgId, count: files.length, size: file.size, mime: file.type });
+            if (!isAllowedImageType(file)) {
+                uiLog('previewFile:unsupportedType', { mime: file.type });
+                input.value = '';
+                return;
+            }
+            if(inputId === 'gen-file') pastedFiles.gen = null;
+            if(inputId === 'product-file') pastedFiles.product = null;
+            if(inputId === 'poses-file') pastedFiles.poses = null;
+            if(inputId === 'ref-style-file') pastedFiles.refStyle = null;
+            if(inputId === 'ref-target-file') pastedFiles.refTarget = null;
 
-                const reader = new FileReader();
+            const reader = new FileReader();
                 reader.onload = (e) => {
                     const img = document.getElementById(imgId);
                     img.src = e.target.result;
@@ -2205,13 +2252,14 @@
                 fileInput = document.getElementById('gen-file');
                 btn = document.getElementById('btn-gen');
                 imgRes = document.getElementById('gen-img');
-                container = document.getElementById('gen-result-area'); // Контейнер
+                container = document.getElementById('gen-result-area');
                 apiUrl = '/api/generate';
-                fileToSend = fileInput.files[0] || pastedFiles.gen;
+                const genFiles = fileInput.files.length ? Array.from(fileInput.files) : (pastedFiles.gen ? [pastedFiles.gen] : []);
+                const genFilesTrimmed = genFiles.slice(0, MAX_PHOTOS);
                 uiLog('runGeneration:text:init', {
                     hasPrompt: !!prompt,
                     promptLength: (prompt || '').length,
-                    hasFile: !!fileToSend
+                    fileCount: genFilesTrimmed.length
                 });
                 if (!prompt) {
                     showErrorToast('Введите текст промта.');
@@ -2219,26 +2267,26 @@
                     return;
                 }
                 bodyData = { prompt, initData: tg.initData };
-                if (fileToSend) {
-                    apiUrl = '/api/generate-image';
-                    bodyData = { formData: true, prompt, initData: tg.initData, file: fileToSend };
+                if (genFilesTrimmed.length) {
+                    apiUrl = '/api/generate';
+                    const imagesBase64 = await Promise.all(genFilesTrimmed.map(f => toBase64(f)));
+                    bodyData = { prompt, initData: tg.initData, imagesBase64 };
                 }
             } 
             else if (type === 'product') {
                 prompt = document.getElementById('product-prompt').value;
                 fileInput = document.getElementById('product-file');
                 btn = document.getElementById('btn-product');
-                container = document.getElementById('product-result-area'); // Контейнер
+                container = document.getElementById('product-result-area');
                 apiUrl = '/api/product-gen-image';
-                fileToSend = fileInput.files[0] || pastedFiles.product;
-
+                const productFiles = fileInput.files.length ? Array.from(fileInput.files) : (pastedFiles.product ? [pastedFiles.product] : []);
+                const productFilesTrimmed = productFiles.slice(0, MAX_PHOTOS);
                 uiLog('runGeneration:product:init', {
                     hasPrompt: !!prompt,
                     promptLength: (prompt || '').length,
-                    hasFile: !!fileToSend
+                    fileCount: productFilesTrimmed.length
                 });
-
-                if (!fileToSend) {
+                if (!productFilesTrimmed.length) {
                     uiLog('runGeneration:product:abort', { reason: 'no file' });
                     showErrorToast('Нужно загрузить фото продукта.');
                     return;
@@ -2248,8 +2296,9 @@
                     showErrorToast('Опишите фон и окружение для продукта.');
                     return;
                 }
-
-                bodyData = { formData: true, prompt, initData: tg.initData, file: fileToSend };
+                const imagesBase64 = await Promise.all(productFilesTrimmed.map(f => toBase64(f)));
+                apiUrl = '/api/product-gen';
+                bodyData = { prompt, initData: tg.initData, imagesBase64 };
             }
             else if (type === 'ref') {
                 const styleInput = document.getElementById('ref-style-file');
@@ -2280,7 +2329,7 @@
                     return;
                 }
                 if (isTemplateMode) {
-                    if (!refTemplateBase64) {
+                    if (!refTemplatePrompt) {
                         showErrorToast('Выберите шаблон.');
                         return;
                     }
@@ -2288,23 +2337,22 @@
                         showErrorToast('Загрузите ваше фото.');
                         return;
                     }
-                } else if (!prompt) {
-                    uiLog('runGeneration:ref:abort', { reason: 'no prompt' });
-                    showErrorToast('Опишите, что вы хотите получить по референсу.');
-                    return;
-                }
-
-                const refBase64 = refTemplateBase64 || await toBase64(refFile);
-                const refMeta = typeof refBase64 === 'string' ? { length: refBase64.length } : {};
-                uiLog('runGeneration:ref:refBase64Ready', refMeta);
-
-                if (targetFile) {
                     const targetBase64 = await toBase64(targetFile);
-                    const targetMeta = typeof targetBase64 === 'string' ? { length: targetBase64.length } : {};
-                    uiLog('runGeneration:ref:targetBase64Ready', targetMeta);
-                    bodyData = { prompt, initData: tg.initData, refImageBase64: refBase64, targetImageBase64: targetBase64 };
+                    bodyData = { templateMode: true, templatePrompt: refTemplatePrompt, initData: tg.initData, imagesBase64: [targetBase64] };
                 } else {
-                    bodyData = { prompt, initData: tg.initData, refImageBase64: refBase64 };
+                    if (!prompt) {
+                        uiLog('runGeneration:ref:abort', { reason: 'no prompt' });
+                        showErrorToast('Опишите, что вы хотите получить по референсу.');
+                        return;
+                    }
+                    const refBase64 = await toBase64(refFile);
+                    uiLog('runGeneration:ref:refBase64Ready', { length: refBase64.length });
+                    if (targetFile) {
+                        const targetBase64 = await toBase64(targetFile);
+                        bodyData = { prompt, initData: tg.initData, refImageBase64: refBase64, targetImageBase64: targetBase64 };
+                    } else {
+                        bodyData = { prompt, initData: tg.initData, refImageBase64: refBase64 };
+                    }
                 }
             }
             else if (type === 'poses') {
@@ -2313,7 +2361,8 @@
                 btn = document.getElementById('btn-poses');
                 container = document.getElementById('poses-result-area');
                 apiUrl = '/api/poses-gen-image';
-                fileToSend = fileInput.files[0] || pastedFiles.poses;
+                const posesFiles = fileInput.files;
+                fileToSend = (posesFiles && posesFiles.length) ? posesFiles[0] : pastedFiles.poses;
 
                 const countVal = parseInt(document.getElementById('poses-count').value, 10);
                 const count = isNaN(countVal) ? 4 : Math.min(10, Math.max(1, countVal));

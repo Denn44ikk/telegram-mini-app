@@ -1,10 +1,10 @@
 {
   "templates": [
-    { "name": "Окно 1", "image": "1.jpg" },
-    { "name": "Окно 2", "image": "2.jpg" },
-    { "name": "Окно 3", "image": "3.jpg" },
-    { "name": "Окно 4", "image": "4.jpg" },
-    { "name": "Окно 5", "image": "5.jpg" },
-    { "name": "Окно 6", "image": "6.jpg" }
+    { "name": "Окно 1", "image": "1.jpg", "prompt": "Place the person from this photo by a bright window in a cozy interior. Keep the same person, natural lighting and realistic skin. Return ONLY the image." },
+    { "name": "Окно 2", "image": "2.jpg", "prompt": "Place the person from this photo by a window with soft daylight. Preserve the person's identity and natural look. Return ONLY the image." },
+    { "name": "Окно 3", "image": "3.jpg", "prompt": "Place the person from this photo in a scene by a large window. Natural lighting, same person, hyper-realistic. Return ONLY the image." },
+    { "name": "Окно 4", "image": "4.jpg", "prompt": "Place the person from this photo near a window in an interior. Preserve identity and realistic details. Return ONLY the image." },
+    { "name": "Окно 5", "image": "5.jpg", "prompt": "Place the person from this photo by a window with natural light. Same person, realistic photograph. Return ONLY the image." },
+    { "name": "Окно 6", "image": "6.jpg", "prompt": "Place the person from this photo in a bright window setting. Keep the same person and natural skin texture. Return ONLY the image." }
   ]
 }
