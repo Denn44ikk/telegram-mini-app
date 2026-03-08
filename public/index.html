@@ -278,6 +278,7 @@
             font-size: 12px;
             cursor: pointer;
             padding: 0;
+            z-index: 3;
         }
         .upload-clear-btn.visible {
             display: flex;
@@ -288,6 +289,21 @@
             display: block;
             cursor: pointer;
             position: relative;
+        }
+        /* Инпут файла поверх области — надёжный клик на десктопе (вместо display:none) */
+        .upload-area input[type="file"].file-input-overlay,
+        .mini-upload input[type="file"].file-input-overlay {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+            font-size: 0;
+            margin: 0;
+            padding: 0;
+            z-index: 2;
         }
         .upload-area .photo-insert-card { margin-bottom: 0; }
         .upload-area.highlight .photo-insert-card { background: #432a62; box-shadow: 0 0 0 2px rgba(139,220,247,.35); }
@@ -1039,7 +1055,7 @@
         </div>
 
         <label id="gen-drop-zone" class="upload-area" onclick="setActivePasteTarget('gen')">
-            <input type="file" id="gen-file" accept="image/*" multiple style="display:none" onchange="previewFile('gen-file', 'gen-preview')">
+            <input type="file" id="gen-file" class="file-input-overlay" accept="image/*" multiple onchange="previewFile('gen-file', 'gen-preview')">
             <div class="photo-insert-card">
                 <div class="photo-insert-row">
                     <div class="photo-insert-icon-wrap" id="gen-icon-wrap">
@@ -1077,7 +1093,7 @@
         </div>
 
         <label id="product-drop-zone" class="upload-area" onclick="setActivePasteTarget('product')">
-            <input type="file" id="product-file" accept="image/*" multiple style="display:none" onchange="previewFile('product-file', 'product-preview')">
+            <input type="file" id="product-file" class="file-input-overlay" accept="image/*" multiple onchange="previewFile('product-file', 'product-preview')">
             <div class="photo-insert-card">
                 <div class="photo-insert-row">
                     <div class="photo-insert-icon-wrap" id="product-icon-wrap">
@@ -1131,7 +1147,7 @@
 
         <div id="ref-own-block" class="ref-source-panel">
         <label class="mini-upload" onclick="setActivePasteTarget('ref-style')">
-            <input type="file" id="ref-style-file" accept="image/*" style="display:none" onchange="previewFile('ref-style-file', 'ref-style-preview')">
+            <input type="file" id="ref-style-file" class="file-input-overlay" accept="image/*" onchange="previewFile('ref-style-file', 'ref-style-preview')">
             <div class="photo-insert-card">
                 <div class="photo-insert-row">
                     <div class="photo-insert-icon-wrap" id="ref-style-icon-wrap">
@@ -1165,7 +1181,7 @@
 
         <div id="ref-target-wrap" class="ref-target-wrap">
             <label class="mini-upload" onclick="setActivePasteTarget('ref-target')">
-                <input type="file" id="ref-target-file" accept="image/*" style="display:none" onchange="previewFile('ref-target-file', 'ref-target-preview')">
+                <input type="file" id="ref-target-file" class="file-input-overlay" accept="image/*" onchange="previewFile('ref-target-file', 'ref-target-preview')">
                 <div class="photo-insert-card">
                     <div class="photo-insert-row">
                         <div class="photo-insert-icon-wrap" id="ref-target-icon-wrap">
@@ -1204,7 +1220,7 @@
         </div>
 
         <label id="poses-drop-zone" class="upload-area" onclick="setActivePasteTarget('poses')">
-            <input type="file" id="poses-file" accept="image/*" style="display:none" onchange="previewFile('poses-file', 'poses-preview')">
+            <input type="file" id="poses-file" class="file-input-overlay" accept="image/*" onchange="previewFile('poses-file', 'poses-preview')">
             <div class="photo-insert-card">
                 <div class="photo-insert-row">
                     <div class="photo-insert-icon-wrap" id="poses-icon-wrap">
@@ -1464,6 +1480,9 @@
         const MAX_PHOTOS = 3;
         const MAX_PHOTOS_POSES = 1;
         let pastedFiles = { gen: null, product: null, poses: null, refStyle: null, refTarget: null };
+        /** Сохранённые файлы при выборе через диалог (на десктопе input.files может теряться) */
+        let lastSelectedGenFiles = [];
+        let lastSelectedProductFiles = [];
         let refTemplateBase64 = null;
         let refTemplatePrompt = null;
         let refSourceMode = 'own';
@@ -2120,18 +2139,20 @@
             if (id === 'gen') {
                 document.getElementById('gen-file').value = '';
                 pastedFiles.gen = null;
+                lastSelectedGenFiles = [];
                 const genWrap = document.getElementById('gen-icon-wrap');
                 if (genWrap) { genWrap.classList.remove('has-photo'); genWrap.closest('.photo-insert-card')?.classList.remove('has-photo'); }
                 document.getElementById('gen-preview').src = '';
-                document.getElementById('gen-file-text').innerText = 'Загрузить или вставить (Ctrl+V)';
+                document.getElementById('gen-file-text').innerText = 'Загрузить до 3 фото или вставить (Ctrl+V)';
                 document.getElementById('gen-clear').classList.remove('visible');
             } else if (id === 'product') {
                 document.getElementById('product-file').value = '';
                 pastedFiles.product = null;
+                lastSelectedProductFiles = [];
                 const productWrap = document.getElementById('product-icon-wrap');
                 if (productWrap) { productWrap.classList.remove('has-photo'); productWrap.closest('.photo-insert-card')?.classList.remove('has-photo'); }
                 document.getElementById('product-preview').src = '';
-                document.getElementById('product-text').innerText = 'Загрузить или вставить (Ctrl+V)';
+                document.getElementById('product-text').innerText = 'Загрузить до 3 фото или вставить (Ctrl+V)';
                 document.getElementById('product-clear').classList.remove('visible');
             } else if (id === 'poses') {
                 document.getElementById('poses-file').value = '';
@@ -2219,8 +2240,14 @@
                 input.value = '';
                 return;
             }
-            if(inputId === 'gen-file') pastedFiles.gen = null;
-            if(inputId === 'product-file') pastedFiles.product = null;
+            if(inputId === 'gen-file') {
+                pastedFiles.gen = null;
+                lastSelectedGenFiles = Array.from(files).filter(function(f) { return isAllowedImageType(f); }).slice(0, MAX_PHOTOS);
+            }
+            if(inputId === 'product-file') {
+                pastedFiles.product = null;
+                lastSelectedProductFiles = Array.from(files).filter(function(f) { return isAllowedImageType(f); }).slice(0, MAX_PHOTOS);
+            }
             if(inputId === 'poses-file') pastedFiles.poses = null;
             if(inputId === 'ref-style-file') pastedFiles.refStyle = null;
             if(inputId === 'ref-target-file') pastedFiles.refTarget = null;
@@ -2234,7 +2261,10 @@
                 if (wrap) wrap.classList.add('has-photo');
                 if (card) card.classList.add('has-photo');
                 const labelId = { 'gen-preview': 'gen-file-text', 'product-preview': 'product-text', 'poses-preview': 'poses-text', 'ref-style-preview': 'ref-style-text', 'ref-target-preview': 'ref-target-text' }[imgId];
-                if (labelId) document.getElementById(labelId).innerText = 'Фото принято';
+                if (labelId) {
+                    const n = (inputId === 'gen-file' ? lastSelectedGenFiles : inputId === 'product-file' ? lastSelectedProductFiles : []).length;
+                    document.getElementById(labelId).innerText = n > 1 ? 'Выбрано ' + n + ' фото' : 'Фото принято';
+                }
                 const clearId = { 'gen-preview': 'gen-clear', 'product-preview': 'product-clear', 'poses-preview': 'poses-clear', 'ref-style-preview': 'ref-style-clear', 'ref-target-preview': 'ref-target-clear' }[imgId];
                 if (clearId) document.getElementById(clearId).classList.add('visible');
             };
@@ -2253,7 +2283,7 @@
                 imgRes = document.getElementById('gen-img');
                 container = document.getElementById('gen-result-area');
                 apiUrl = '/api/generate';
-                const genFiles = fileInput.files.length ? Array.from(fileInput.files) : (pastedFiles.gen ? [pastedFiles.gen] : []);
+                const genFiles = (lastSelectedGenFiles.length ? lastSelectedGenFiles : (fileInput.files.length ? Array.from(fileInput.files) : (pastedFiles.gen ? [pastedFiles.gen] : [])));
                 const genFilesTrimmed = genFiles.slice(0, MAX_PHOTOS);
                 uiLog('runGeneration:text:init', {
                     hasPrompt: !!prompt,
@@ -2278,7 +2308,7 @@
                 btn = document.getElementById('btn-product');
                 container = document.getElementById('product-result-area');
                 apiUrl = '/api/product-gen-image';
-                const productFiles = fileInput.files.length ? Array.from(fileInput.files) : (pastedFiles.product ? [pastedFiles.product] : []);
+                const productFiles = (lastSelectedProductFiles.length ? lastSelectedProductFiles : (fileInput.files.length ? Array.from(fileInput.files) : (pastedFiles.product ? [pastedFiles.product] : [])));
                 const productFilesTrimmed = productFiles.slice(0, MAX_PHOTOS);
                 uiLog('runGeneration:product:init', {
                     hasPrompt: !!prompt,
