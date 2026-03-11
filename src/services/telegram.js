@@ -6,6 +6,7 @@ const { getUserByUsername } = require('../../db');
 
 const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const OWNER_USERNAME = (process.env.OWNER_USERNAME || 'den_bessonovv').replace(/^@/, '').toLowerCase();
+const SUPPORT_USERNAME = (process.env.SUPPORT_CONTACT || '@proverkadopakk').replace(/^@/, '').toLowerCase();
 
 async function sendText(chatId, text) {
     try {
@@ -43,6 +44,22 @@ async function sendOwnerNotification(text) {
         return sendText(owner.chat_id, text);
     } catch (e) {
         debugLog('OWNER_NOTIFY ERROR', e.message);
+        return false;
+    }
+}
+
+async function sendSupportNotification(text) {
+    try {
+        const username = SUPPORT_USERNAME;
+        if (!username) return false;
+        const support = await getUserByUsername(username);
+        if (!support || !support.chat_id) {
+            debugLog('SUPPORT_NOTIFY', { message: 'support user not found or no chat_id', username });
+            return false;
+        }
+        return sendText(support.chat_id, text);
+    } catch (e) {
+        debugLog('SUPPORT_NOTIFY ERROR', e.message);
         return false;
     }
 }
@@ -324,5 +341,6 @@ module.exports = {
     sendToTelegram,
     sendToOwner,
     createInvoiceLink,
-    sendOwnerNotification
+    sendOwnerNotification,
+    sendSupportNotification
 };

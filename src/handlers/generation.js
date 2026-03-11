@@ -7,7 +7,8 @@ const {
     sendMediaGroupToOwner,
     sendToTelegram,
     sendToOwner,
-    sendOwnerNotification
+    sendOwnerNotification,
+    sendSupportNotification
 } = require('../services/telegram');
 const { getChatId } = require('../utils/telegram');
 const { debugLog } = require('../utils/logger');
@@ -100,6 +101,15 @@ async function handleGeneration(req, res) {
     } catch (error) {
         debugLog('3. ОШИБКА', error.response?.data || error.message);
         if (chatId) await sendText(chatId, `❌ Error:\n${error.message.substring(0, 200)}`);
+        if (user?.telegram_user_id) {
+            const supportMsg =
+                `❌ Ошибка генерации (single)\n` +
+                `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}\n` +
+                `Модель: ${getModelId()}\n` +
+                `Промт: ${String(prompt).substring(0, 300)}\n` +
+                `Ошибка: ${error.message}`;
+            await sendSupportNotification(supportMsg);
+        }
         res.json({ error: 'Ошибка генерации', details: error.message });
     }
 }
@@ -153,6 +163,15 @@ async function handleProductGeneration(req, res) {
         if (imageUrls.length === 0) {
             const msg = failed ? `Все 5 запросов не вернули картинку.` : 'AI не вернул картинки.';
             if (chatId) await sendText(chatId, `❌ ${msg}`);
+            if (user?.telegram_user_id) {
+                const supportMsg =
+                    `⚠️ Неудачная генерация продукта\n` +
+                    `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}\n` +
+                    `Модель: ${modelId}\n` +
+                    `Промт: ${String(prompt).substring(0, 300)}\n` +
+                    `Комментарий: ${msg}`;
+                await sendSupportNotification(supportMsg);
+            }
             return res.json({ error: msg, imageUrls: [] });
         }
 
@@ -184,6 +203,15 @@ async function handleProductGeneration(req, res) {
     } catch (error) {
         debugLog('PRODUCT ОШИБКА', error.message);
         if (chatId) await sendText(chatId, `❌ Error: ${error.message.substring(0, 200)}`);
+        if (user?.telegram_user_id) {
+            const supportMsg =
+                `❌ Ошибка генерации продукта\n` +
+                `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}\n` +
+                `Модель: ${getModelId()}\n` +
+                `Промт: ${String(prompt).substring(0, 300)}\n` +
+                `Ошибка: ${error.message}`;
+            await sendSupportNotification(supportMsg);
+        }
         res.json({ error: 'Ошибка генерации', details: error.message });
     }
 }
@@ -240,6 +268,15 @@ async function handlePosesGeneration(req, res) {
         if (imageUrls.length === 0) {
             const msg = failed ? `Все запросы на позы не вернули картинку.` : 'AI не вернул картинки с позами.';
             if (chatId) await sendText(chatId, `❌ ${msg}`);
+            if (user?.telegram_user_id) {
+                const supportMsg =
+                    `⚠️ Неудачная генерация поз\n` +
+                    `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}\n` +
+                    `Модель: ${modelId}\n` +
+                    `Промт: ${String(prompt || 'Случайные позы').substring(0, 300)}\n` +
+                    `Комментарий: ${msg}`;
+                await sendSupportNotification(supportMsg);
+            }
             return res.json({ error: msg, imageUrls: [] });
         }
 
@@ -271,6 +308,15 @@ async function handlePosesGeneration(req, res) {
     } catch (error) {
         debugLog('POSES ОШИБКА', error.message);
         if (chatId) await sendText(chatId, `❌ Error: ${error.message.substring(0, 200)}`);
+        if (user?.telegram_user_id) {
+            const supportMsg =
+                `❌ Ошибка генерации поз\n` +
+                `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}\n` +
+                `Модель: ${getModelId()}\n` +
+                `Промт: ${String(prompt || 'Случайные позы').substring(0, 300)}\n` +
+                `Ошибка: ${error.message}`;
+            await sendSupportNotification(supportMsg);
+        }
         res.json({ error: 'Ошибка генерации поз', details: error.message });
     }
 }
@@ -416,6 +462,15 @@ async function handleRefPairGeneration(req, res) {
 
         if (imageUrls.length === 0) {
             if (chatId) await sendText(chatId, '❌ Не удалось сгенерировать ни одного изображения.');
+            if (user?.telegram_user_id) {
+                const supportMsg =
+                    `⚠️ Неудачная генерация по референсу\n` +
+                    `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}\n` +
+                    `Модель: ${modelId}\n` +
+                    `Промт: ${String(prompt).substring(0, 300)}\n` +
+                    `Комментарий: Ни одного изображения не получено.`;
+                await sendSupportNotification(supportMsg);
+            }
             return res.json({ error: 'Ошибка генерации по референсу', imageUrls: [] });
         }
 
@@ -455,8 +510,8 @@ async function handleRefPairGeneration(req, res) {
         } else {
             res.json({ imageUrls, sentToChat });
         }
-    } catch (error) {
-        debugLog('REFPAIR ОШИБКА', {
+        } catch (error) {
+            debugLog('REFPAIR ОШИБКА', {
             message: error.message,
             name: error.name,
             stack: error.stack,
@@ -464,6 +519,15 @@ async function handleRefPairGeneration(req, res) {
             responseData: error.response?.data
         });
         if (chatId) await sendText(chatId, `❌ Error:\n${error.message.substring(0, 200)}`);
+        if (user?.telegram_user_id) {
+            const supportMsg =
+                `❌ Ошибка генерации по референсу\n` +
+                `Пользователь: id=${user.telegram_user_id}${user.username ? ` (@${user.username})` : ''}\n` +
+                `Модель: ${getModelId()}\n` +
+                `Промт: ${String(prompt).substring(0, 300)}\n` +
+                `Ошибка: ${error.message}`;
+            await sendSupportNotification(supportMsg);
+        }
         res.status(500).json({ error: 'Ошибка генерации по референсу', details: error.message });
     }
 }

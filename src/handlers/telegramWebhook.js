@@ -59,25 +59,37 @@ async function handleKickCommand(text, senderTelegramId) {
     }
 }
 
-/** Команда для админа den_bessonovv: пополнение баланса пользователя без оплаты. /balance username сумма */
+/** Команда для админа den_bessonovv: пополнение баланса пользователя без оплаты.
+ * Поддерживает username и telegram_user_id:
+ * /balance username сумма
+ * /balance telegram_user_id сумма
+ */
 async function handleBalanceCommand(text, senderTelegramId) {
     const parts = text.trim().split(/\s+/);
     if (parts.length < 3) {
-        return 'Использование: /balance <username> <сумма>\nПример: /balance ivanov 100';
+        return 'Использование: /balance <username|telegram_id> <сумма>\nПримеры:\n/balance ivanov 100\n/balance 123456789 100';
     }
-    const username = parts[1].replace(/^@/, '').trim();
+    const target = parts[1].trim();
     const amount = parseInt(parts[2], 10);
-    if (!username || isNaN(amount) || amount <= 0) {
-        return 'Укажите username (без @) и целую положительную сумму.';
+    if (!target || isNaN(amount) || amount <= 0) {
+        return 'Укажите username (без @) или telegram_id и целую положительную сумму.';
     }
     try {
         await initDb();
-        const user = await getUserByUsername(username);
+        let user = null;
+        const numericId = target.replace(/^@/, '').match(/^\d+$/) ? target.replace(/^@/, '') : null;
+        if (numericId) {
+            user = await getUserByTelegramId(numericId);
+        } else {
+            const username = target.replace(/^@/, '');
+            user = await getUserByUsername(username);
+        }
         if (!user) {
-            return `❌ Пользователь @${username} не найден.`;
+            return `❌ Пользователь ${numericId ? `id=${numericId}` : `@${target.replace(/^@/, '')}`} не найден.`;
         }
         await adjustUserBalance(user.telegram_user_id, amount);
-        return `✅ Баланс пользователя @${username} пополнен на ${amount} BNB. Текущий баланс: ${(user.balance || 0) + amount} BNB.`;
+        const displayName = user.username ? `@${user.username}` : `id=${user.telegram_user_id}`;
+        return `✅ Баланс пользователя ${displayName} пополнен на ${amount} BNB. Текущий баланс: ${(user.balance || 0) + amount} BNB.`;
     } catch (e) {
         debugLog('BALANCE COMMAND ERROR', e.message);
         return '❌ Ошибка: ' + e.message;
