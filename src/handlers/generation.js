@@ -290,7 +290,17 @@ async function handleRefPairGeneration(req, res) {
     if (!process.env.OPENROUTER_API_KEY) {
         return res.status(500).json({ error: 'Не настроен OPENROUTER_API_KEY. Добавьте ключ в .env' });
     }
-    const { prompt, initData, refImageBase64, targetImageBase64, targetImagesBase64, templateMode, templatePrompt, imagesBase64 } = req.body || {};
+    const {
+        prompt,
+        initData,
+        refImageBase64,
+        targetImageBase64,
+        targetImagesBase64,
+        templateMode,
+        templatePrompt,
+        imagesBase64,
+        templateImageBase64
+    } = req.body || {};
     const modelId = getModelId();
     const targetList = (targetImagesBase64 && Array.isArray(targetImagesBase64) && targetImagesBase64.length > 0)
         ? targetImagesBase64.slice(0, 3)
@@ -303,7 +313,9 @@ async function handleRefPairGeneration(req, res) {
         model: modelId
     });
 
-    // Режим шаблона: промт шаблона + фото пользователя (без референса)
+    // Режим шаблона: промт шаблона + фото пользователя.
+    // Если передан templateImageBase64, используем его как референс-стиль (через buildRefPairMessages),
+    // иначе работаем как "чистый" шаблонный промт + фото пользователя.
     if (templateMode && templatePrompt && imagesBase64 && imagesBase64.length > 0) {
         const chatId = getChatId(initData);
         let user = null;
@@ -325,8 +337,14 @@ async function handleRefPairGeneration(req, res) {
             });
         }
         try {
-            const messages = buildMessages(templatePrompt, imagesBase64[0], 'gen', { rawPrompt: true });
-            const imageUrl = await callAIWithMessages(messages);
+            let imageUrl;
+            if (templateImageBase64) {
+                const messages = buildRefPairMessages(templatePrompt, templateImageBase64, imagesBase64[0]);
+                imageUrl = await callAIWithMessages(messages);
+            } else {
+                const messages = buildMessages(templatePrompt, imagesBase64[0], 'gen', { rawPrompt: true });
+                imageUrl = await callAIWithMessages(messages);
+            }
             debugLog('2. REFPAIR TEMPLATE РЕЗУЛЬТАТ', '✅ Картинка получена');
             let sentToChat = false;
             if (chatId) sentToChat = await sendToTelegram(chatId, imageUrl, templatePrompt.substring(0, 100), true);

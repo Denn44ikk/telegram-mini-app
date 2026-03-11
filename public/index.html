@@ -195,6 +195,63 @@
         textarea { width: 100%; height: 80px; background: transparent; border: none; color: var(--text-color); font-size: 16px; resize: none; outline: none; }
         textarea::placeholder { color: var(--hint-color); }
 
+        /* Переключатель режима в фотосессии (Фотосессия / Инфографика) */
+        .product-mode-toggle {
+            display: inline-flex;
+            border-radius: 999px;
+            padding: 2px;
+            background: rgba(15,23,42,0.9);
+            border: 1px solid rgba(148,163,184,0.5);
+            margin-bottom: 14px;
+        }
+        .product-mode-btn {
+            flex: 1;
+            border: none;
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            color: rgba(226,232,240,0.85);
+            background: transparent;
+            transition: all 0.2s ease;
+        }
+        .product-mode-btn.active {
+            background: linear-gradient(135deg,#8b5cf6,#ec4899);
+            color: #fff;
+            box-shadow: 0 0 12px rgba(236,72,153,0.5);
+        }
+        .product-mode-btn:not(.active):hover {
+            background: rgba(30,64,175,0.4);
+        }
+
+        .product-photo-ready-toggle {
+            display: inline-flex;
+            border-radius: 999px;
+            padding: 2px;
+            background: rgba(15,23,42,0.9);
+            border: 1px solid rgba(148,163,184,0.5);
+            margin-top: 6px;
+            margin-bottom: 10px;
+        }
+        .product-photo-ready-btn {
+            flex: 1;
+            border: none;
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            color: rgba(226,232,240,0.8);
+            background: transparent;
+            transition: all 0.2s ease;
+        }
+        .product-photo-ready-btn.active {
+            background: rgba(56,189,248,0.9);
+            color: #0f172a;
+            box-shadow: 0 0 10px rgba(56,189,248,0.6);
+        }
+
         /* Единый дизайн карточки вставки фото (тёмно-фиолетовая карточка) */
         .photo-insert-card {
             background: #372352;
@@ -1021,7 +1078,7 @@
             </button>
             <button class="menu-btn full-width gradient-cool purple-glow" onclick="navTo('product-screen')">
                 <i class="fa-solid fa-camera-retro"></i>
-                <span>Фотосессия с продуктом</span>
+                <span>Фотосессия для маркетплейсов</span>
             </button>
             <button class="menu-btn full-width gradient-mint mint-glow" onclick="navTo('ref-screen')">
                 <i class="fa-solid fa-images"></i>
@@ -1092,6 +1149,11 @@
             <div style="width: 24px;"></div>
         </div>
 
+        <div class="product-mode-toggle" role="group" aria-label="Режим работы">
+            <button type="button" class="product-mode-btn active" id="product-mode-photoshoot" onclick="setProductMode('photoshoot')">Фотосессия</button>
+            <button type="button" class="product-mode-btn" id="product-mode-infographic" onclick="setProductMode('infographic')">Инфографика</button>
+        </div>
+
         <label id="product-drop-zone" class="upload-area" onclick="setActivePasteTarget('product')">
             <input type="file" id="product-file" class="file-input-overlay" accept="image/*" multiple onchange="previewFile('product-file', 'product-preview')">
             <div class="photo-insert-card">
@@ -1108,8 +1170,49 @@
             </button>
         </label>
 
-        <div class="input-card">
-            <textarea id="product-prompt" placeholder="Опишите окружение..."></textarea>
+        <!-- Блок для режима "Фотосессия" -->
+        <div id="product-photoshoot-fields">
+            <div class="input-card">
+                <div style="font-size: 13px; color: var(--hint-color); margin-bottom: 4px;">Как показать товар?</div>
+                <textarea id="product-photoshoot-how" placeholder="Например: крупный план, на белом фоне, в интерьере, на модели..."></textarea>
+            </div>
+            <div class="input-card">
+                <div style="font-size: 13px; color: var(--hint-color); margin-bottom: 4px;">Пожелания</div>
+                <textarea id="product-photoshoot-notes" placeholder="Целевая площадка, ограничения, стиль, цвета, что важно подчеркнуть..."></textarea>
+            </div>
+        </div>
+
+        <!-- Блок для режима "Инфографика" -->
+        <div id="product-infographic-fields" style="display: none;">
+            <div class="input-card">
+                <div style="font-size: 13px; color: var(--hint-color); margin-bottom: 4px;">Фото готово?</div>
+                <div class="product-photo-ready-toggle" role="group" aria-label="Фото готово">
+                    <button type="button" class="product-photo-ready-btn active" id="product-photo-ready-yes" onclick="setProductPhotoReady('yes')">Да</button>
+                    <button type="button" class="product-photo-ready-btn" id="product-photo-ready-no" onclick="setProductPhotoReady('no')">Нет</button>
+                </div>
+            </div>
+
+            <div id="product-infographic-yes-block">
+                <div class="input-card">
+                    <div style="font-size: 13px; color: var(--hint-color); margin-bottom: 4px;">О чём рассказать</div>
+                    <textarea id="product-infographic-what-yes" placeholder="Какие преимущества, характеристики или выгоды нужно объяснить на готовом фото?"></textarea>
+                </div>
+            </div>
+
+            <div id="product-infographic-no-block" style="display: none;">
+                <div class="input-card">
+                    <div style="font-size: 13px; color: var(--hint-color); margin-bottom: 4px;">Как показать товар?</div>
+                    <textarea id="product-infographic-how-no" placeholder="Например: из каких ракурсов, в упаковке/без, с чем сравнить..."></textarea>
+                </div>
+                <div class="input-card">
+                    <div style="font-size: 13px; color: var(--hint-color); margin-bottom: 4px;">Пожелания</div>
+                    <textarea id="product-infographic-notes-no" placeholder="Оформление, стиль, цвета, текстовые блоки, запрещённые элементы..."></textarea>
+                </div>
+                <div class="input-card">
+                    <div style="font-size: 13px; color: var(--hint-color); margin-bottom: 4px;">О чём рассказать</div>
+                    <textarea id="product-infographic-what-no" placeholder="Ключевые преимущества, выгоды и факты, которые должны быть на инфографике."></textarea>
+                </div>
+            </div>
         </div>
 
         <div class="result-placeholder" id="product-result-area" style="min-height: 200px;">
@@ -1486,6 +1589,10 @@
         let lastSelectedGenFiles = [];
         let lastSelectedProductFiles = [];
         let lastSelectedRefTargetFiles = [];
+        /** Текущий режим экрана "Фотосессия": photoshoot | infographic */
+        let productMode = 'photoshoot';
+        /** Для режима "Инфографика": готово ли фото (yes | no) */
+        let productPhotoReady = 'yes';
         let refTemplateBase64 = null;
         let refTemplatePrompt = null;
         let refSourceMode = 'own';
@@ -1510,6 +1617,30 @@
             } catch (e) {
                 refTemplatesList = [];
             }
+        }
+
+        function setProductMode(mode) {
+            productMode = mode === 'infographic' ? 'infographic' : 'photoshoot';
+            const btnPhotoshoot = document.getElementById('product-mode-photoshoot');
+            const btnInfographic = document.getElementById('product-mode-infographic');
+            if (btnPhotoshoot) btnPhotoshoot.classList.toggle('active', productMode === 'photoshoot');
+            if (btnInfographic) btnInfographic.classList.toggle('active', productMode === 'infographic');
+            const photoshootBlock = document.getElementById('product-photoshoot-fields');
+            const infographicBlock = document.getElementById('product-infographic-fields');
+            if (photoshootBlock) photoshootBlock.style.display = productMode === 'photoshoot' ? 'block' : 'none';
+            if (infographicBlock) infographicBlock.style.display = productMode === 'infographic' ? 'block' : 'none';
+        }
+
+        function setProductPhotoReady(state) {
+            productPhotoReady = state === 'no' ? 'no' : 'yes';
+            const btnYes = document.getElementById('product-photo-ready-yes');
+            const btnNo = document.getElementById('product-photo-ready-no');
+            if (btnYes) btnYes.classList.toggle('active', productPhotoReady === 'yes');
+            if (btnNo) btnNo.classList.toggle('active', productPhotoReady === 'no');
+            const yesBlock = document.getElementById('product-infographic-yes-block');
+            const noBlock = document.getElementById('product-infographic-no-block');
+            if (yesBlock) yesBlock.style.display = productPhotoReady === 'yes' ? 'block' : 'none';
+            if (noBlock) noBlock.style.display = productPhotoReady === 'no' ? 'block' : 'none';
         }
 
         function setRefSource(mode) {
@@ -2309,7 +2440,58 @@
                 }
             } 
             else if (type === 'product') {
-                prompt = document.getElementById('product-prompt').value;
+                // Собираем промт из ответов пользователя в зависимости от режима
+                const mode = productMode || 'photoshoot';
+                let finalPrompt = '';
+                if (mode === 'photoshoot') {
+                    const howEl = document.getElementById('product-photoshoot-how');
+                    const notesEl = document.getElementById('product-photoshoot-notes');
+                    const how = (howEl && howEl.value || '').trim();
+                    const notes = (notesEl && notesEl.value || '').trim();
+                    if (!how && !notes) {
+                        uiLog('runGeneration:product:abort', { reason: 'no-photoshoot-fields' });
+                        showErrorToast('Заполните поле "Как показать товар?" и/или "Пожелания" для фотосессии.');
+                        return;
+                    }
+                    finalPrompt =
+                        'Фотосессия товара для маркетплейсов. ' +
+                        'Как показать товар: ' + (how || 'на усмотрение фотографа, чтобы товар читался ясно и выгодно.') + ' ' +
+                        'Пожелания: ' + (notes || 'без особых ограничений, сделать продающие, понятные ракурсы.');
+                } else {
+                    const readyState = productPhotoReady || 'yes';
+                    if (readyState === 'yes') {
+                        const whatElYes = document.getElementById('product-infographic-what-yes');
+                        const whatYes = (whatElYes && whatElYes.value || '').trim();
+                        if (!whatYes) {
+                            uiLog('runGeneration:product:abort', { reason: 'no-infographic-yes-fields' });
+                            showErrorToast('Опишите, о чём рассказать на инфографике.');
+                            return;
+                        }
+                        finalPrompt =
+                            'Инфографика для маркетплейсов, фото продукта уже готово. ' +
+                            'О чём рассказать: ' + whatYes + '. ' +
+                            'Сделай понятные блоки и подачу, чтобы преимущества товара было легко считать.';
+                    } else {
+                        const howElNo = document.getElementById('product-infographic-how-no');
+                        const notesElNo = document.getElementById('product-infographic-notes-no');
+                        const whatElNo = document.getElementById('product-infographic-what-no');
+                        const howNo = (howElNo && howElNo.value || '').trim();
+                        const notesNo = (notesElNo && notesElNo.value || '').trim();
+                        const whatNo = (whatElNo && whatElNo.value || '').trim();
+                        if (!howNo && !notesNo && !whatNo) {
+                            uiLog('runGeneration:product:abort', { reason: 'no-infographic-no-fields' });
+                            showErrorToast('Заполните хотя бы одно поле для инфографики: как показать товар, пожелания или о чём рассказать.');
+                            return;
+                        }
+                        finalPrompt =
+                            'Инфографика и фотосессия товара для маркетплейсов, исходное фото ещё не готово. ' +
+                            'Как показать товар: ' + (howNo || 'на усмотрение дизайнера и фотографа, чтобы товар был понятен и продающий.') + ' ' +
+                            'Пожелания: ' + (notesNo || 'без жёстких ограничений, но сделать современный, читаемый дизайн.') + ' ' +
+                            'О чём рассказать: ' + (whatNo || 'основные преимущества и свойства товара в виде наглядных блоков.') + '';
+                    }
+                }
+
+                prompt = finalPrompt;
                 fileInput = document.getElementById('product-file');
                 btn = document.getElementById('btn-product');
                 container = document.getElementById('product-result-area');
@@ -2373,7 +2555,14 @@
                         return;
                     }
                     const targetBase64 = await toBase64(targetFiles[0]);
-                    bodyData = { templateMode: true, templatePrompt: refTemplatePrompt, initData: tg.initData, imagesBase64: [targetBase64] };
+                    const templateImageBase64 = refTemplateBase64 || null;
+                    bodyData = {
+                        templateMode: true,
+                        templatePrompt: refTemplatePrompt,
+                        initData: tg.initData,
+                        imagesBase64: [targetBase64],
+                        templateImageBase64
+                    };
                 } else {
                     if (!prompt) {
                         uiLog('runGeneration:ref:abort', { reason: 'no prompt' });
@@ -2515,7 +2704,9 @@
                     grid.classList.add('visible');
                     container.classList.add('has-result');
                     container.querySelector('.placeholder-text').style.display = 'none';
-                    tg.HapticFeedback.notificationOccurred('success');
+                    if (typeof tg !== 'undefined' && tg.HapticFeedback && typeof tg.HapticFeedback.notificationOccurred === 'function') {
+                        tg.HapticFeedback.notificationOccurred('success');
+                    }
                     if (data.sentToChat) {
                         showInfoToast('Готово! Все фото также отправлены в чат с ботом отдельными файлами — вы всегда найдёте их там.');
                     }
@@ -2525,7 +2716,9 @@
                     grid.classList.add('visible');
                     container.classList.add('has-result');
                     container.querySelector('.placeholder-text').style.display = 'none';
-                    tg.HapticFeedback.notificationOccurred('success');
+                    if (typeof tg !== 'undefined' && tg.HapticFeedback && typeof tg.HapticFeedback.notificationOccurred === 'function') {
+                        tg.HapticFeedback.notificationOccurred('success');
+                    }
                     if (data.sentToChat) {
                         showInfoToast('Готово! Все фото также отправлены в чат с ботом отдельными файлами — вы всегда найдёте их там.');
                     }
@@ -2563,7 +2756,9 @@
                         showErrorToast(msg);
                     }
                     uiLog('runGeneration:noResult', { type, data });
-                    tg.HapticFeedback.notificationOccurred('error');
+                    if (typeof tg !== 'undefined' && tg.HapticFeedback && typeof tg.HapticFeedback.notificationOccurred === 'function') {
+                        tg.HapticFeedback.notificationOccurred('error');
+                    }
                 }
             } catch (e) {
                 clearTimeout(timeoutId);
@@ -2573,7 +2768,9 @@
                     showErrorToast('Ошибка сети или сервер не отвечает. Проверьте интернет и попробуйте снова.');
                 }
                 uiLog('runGeneration:fetchError', { type, name: e.name, message: e.message });
-                tg.HapticFeedback.notificationOccurred('error');
+                if (typeof tg !== 'undefined' && tg.HapticFeedback && typeof tg.HapticFeedback.notificationOccurred === 'function') {
+                    tg.HapticFeedback.notificationOccurred('error');
+                }
             } finally {
                 btn.disabled = false;
                 btn.innerText = originalText;
