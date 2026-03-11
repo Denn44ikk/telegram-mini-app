@@ -179,9 +179,30 @@
         .menu-btn.gradient-violet.pink-glow i { color: #fff; }
 
         /* UI — Kimi glass */
-        .nav-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .nav-bar h3 { color: #fff; font-size: 18px; margin: 0; }
+        .nav-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 8px; }
+        .nav-bar h3 { color: #fff; font-size: 18px; margin: 0; flex: 1; }
         .icon-btn { background: none; border: none; color: var(--text-color); font-size: 22px; cursor: pointer; padding: 8px; }
+
+        .nav-instruction-btn {
+            padding: 8px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(148,163,184,0.6);
+            background: rgba(15,23,42,0.9);
+            color: #e5e7eb;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+        .nav-instruction-btn i {
+            font-size: 12px;
+        }
+        .nav-instruction-btn:hover {
+            background: rgba(30,64,175,0.9);
+        }
 
         .input-card {
             background: rgba(255,255,255,.08);
@@ -250,6 +271,68 @@
             background: rgba(56,189,248,0.9);
             color: #0f172a;
             box-shadow: 0 0 10px rgba(56,189,248,0.6);
+        }
+
+        /* Модальное окно инструкции */
+        .instruction-overlay {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at top, rgba(148,163,184,0.15), rgba(15,23,42,0.9));
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            z-index: 9999;
+        }
+        .instruction-overlay.visible {
+            display: flex;
+        }
+        .instruction-modal {
+            width: 100%;
+            max-width: 420px;
+            margin: 0 16px;
+            background: rgba(15,23,42,0.95);
+            border-radius: 18px;
+            border: 1px solid rgba(148,163,184,0.45);
+            box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+            padding: 18px 18px 16px;
+            color: #e5e7eb;
+        }
+        .instruction-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .instruction-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+        .instruction-close {
+            border: none;
+            background: rgba(15,23,42,0.9);
+            color: #e5e7eb;
+            width: 26px;
+            height: 26px;
+            border-radius: 999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .instruction-body {
+            font-size: 13px;
+            color: #cbd5f5;
+            line-height: 1.5;
+        }
+        .instruction-body ul {
+            padding-left: 18px;
+            margin: 6px 0 0;
+        }
+        .instruction-body li {
+            margin-bottom: 4px;
         }
 
         /* Единый дизайн карточки вставки фото (тёмно-фиолетовая карточка) */
@@ -1104,7 +1187,10 @@
         <div class="nav-bar">
             <button class="icon-btn" onclick="navTo('menu-screen')"><i class="fa-solid fa-arrow-left"></i></button>
             <h3>Генерация</h3>
-            <div style="width: 24px;"></div>
+            <button type="button" class="nav-instruction-btn" onclick="openInstruction('gen')">
+                <i class="fa-solid fa-circle-question"></i>
+                Инструкция
+            </button>
         </div>
 
         <div class="input-card">
@@ -1146,7 +1232,10 @@
         <div class="nav-bar">
             <button class="icon-btn" onclick="navTo('menu-screen')"><i class="fa-solid fa-arrow-left"></i></button>
             <h3>Фотосессия</h3>
-            <div style="width: 24px;"></div>
+            <button type="button" class="nav-instruction-btn" onclick="openInstruction('product')">
+                <i class="fa-solid fa-circle-question"></i>
+                Инструкция
+            </button>
         </div>
 
         <div class="product-mode-toggle" role="group" aria-label="Режим работы">
@@ -1173,11 +1262,11 @@
         <!-- Блок для режима "Фотосессия" -->
         <div id="product-photoshoot-fields">
             <div class="input-card">
-                <div style="font-size: 13px; color: var(--hint-color); margin-bottom: 4px;">Как показать товар?</div>
+                <div style="font-size: 13px; color: #ffffff; margin-bottom: 4px;">Как показать товар?</div>
                 <textarea id="product-photoshoot-how" placeholder="Например: крупный план, на белом фоне, в интерьере, на модели..."></textarea>
             </div>
             <div class="input-card">
-                <div style="font-size: 13px; color: var(--hint-color); margin-bottom: 4px;">Пожелания</div>
+                <div style="font-size: 13px; color: #ffffff; margin-bottom: 4px;">Пожелания</div>
                 <textarea id="product-photoshoot-notes" placeholder="Целевая площадка, ограничения, стиль, цвета, что важно подчеркнуть..."></textarea>
             </div>
         </div>
@@ -1185,7 +1274,7 @@
         <!-- Блок для режима "Инфографика" -->
         <div id="product-infographic-fields" style="display: none;">
             <div class="input-card">
-                <div style="font-size: 13px; color: var(--hint-color); margin-bottom: 4px;">Фото готово?</div>
+                <div style="font-size: 13px; color: #ffffff; margin-bottom: 4px;">Фото готово?</div>
                 <div class="product-photo-ready-toggle" role="group" aria-label="Фото готово">
                     <button type="button" class="product-photo-ready-btn active" id="product-photo-ready-yes" onclick="setProductPhotoReady('yes')">Да</button>
                     <button type="button" class="product-photo-ready-btn" id="product-photo-ready-no" onclick="setProductPhotoReady('no')">Нет</button>
@@ -1194,22 +1283,22 @@
 
             <div id="product-infographic-yes-block">
                 <div class="input-card">
-                    <div style="font-size: 13px; color: var(--hint-color); margin-bottom: 4px;">О чём рассказать</div>
+                    <div style="font-size: 13px; color: #ffffff; margin-bottom: 4px;">О чём рассказать</div>
                     <textarea id="product-infographic-what-yes" placeholder="Какие преимущества, характеристики или выгоды нужно объяснить на готовом фото?"></textarea>
                 </div>
             </div>
 
             <div id="product-infographic-no-block" style="display: none;">
                 <div class="input-card">
-                    <div style="font-size: 13px; color: var(--hint-color); margin-bottom: 4px;">Как показать товар?</div>
+                    <div style="font-size: 13px; color: #ffffff; margin-bottom: 4px;">Как показать товар?</div>
                     <textarea id="product-infographic-how-no" placeholder="Например: из каких ракурсов, в упаковке/без, с чем сравнить..."></textarea>
                 </div>
                 <div class="input-card">
-                    <div style="font-size: 13px; color: var(--hint-color); margin-bottom: 4px;">Пожелания</div>
+                    <div style="font-size: 13px; color: #ffffff; margin-bottom: 4px;">Пожелания</div>
                     <textarea id="product-infographic-notes-no" placeholder="Оформление, стиль, цвета, текстовые блоки, запрещённые элементы..."></textarea>
                 </div>
                 <div class="input-card">
-                    <div style="font-size: 13px; color: var(--hint-color); margin-bottom: 4px;">О чём рассказать</div>
+                    <div style="font-size: 13px; color: #ffffff; margin-bottom: 4px;">О чём рассказать</div>
                     <textarea id="product-infographic-what-no" placeholder="Ключевые преимущества, выгоды и факты, которые должны быть на инфографике."></textarea>
                 </div>
             </div>
@@ -1234,7 +1323,10 @@
         <div class="nav-bar">
             <button class="icon-btn" onclick="navTo('menu-screen')"><i class="fa-solid fa-arrow-left"></i></button>
             <h3>Фото по референсу</h3>
-            <div style="width: 24px;"></div>
+            <button type="button" class="nav-instruction-btn" onclick="openInstruction('ref')">
+                <i class="fa-solid fa-circle-question"></i>
+                Инструкция
+            </button>
         </div>
 
         <div class="ref-source-toggle" role="group">
@@ -1320,7 +1412,10 @@
         <div class="nav-bar">
             <button class="icon-btn" onclick="navTo('menu-screen')"><i class="fa-solid fa-arrow-left"></i></button>
             <h3>Случайные позы</h3>
-            <div style="width: 24px;"></div>
+            <button type="button" class="nav-instruction-btn" onclick="openInstruction('poses')">
+                <i class="fa-solid fa-circle-question"></i>
+                Инструкция
+            </button>
         </div>
 
         <label id="poses-drop-zone" class="upload-area" onclick="setActivePasteTarget('poses')">
@@ -1360,6 +1455,19 @@
         </div>
 
         <button id="btn-poses" class="main-btn" onclick="runGeneration('poses')">Сгенерировать позы</button>
+    </div>
+
+    <!-- Модальное окно инструкции -->
+    <div id="instruction-overlay" class="instruction-overlay" onclick="instructionOverlayBackgroundClick(event)">
+        <div class="instruction-modal" onclick="event.stopPropagation()">
+            <div class="instruction-header">
+                <div id="instruction-title" class="instruction-title"></div>
+                <button type="button" class="instruction-close" onclick="closeInstruction()">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="instruction-body" class="instruction-body"></div>
+        </div>
     </div>
 
     <!-- 4. НАСТРОЙКИ -->
@@ -1499,6 +1607,79 @@
         if (tg.setBackgroundColor) tg.setBackgroundColor('#0a0a1a');
 
         const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+
+        function openInstruction(tool) {
+            const overlay = document.getElementById('instruction-overlay');
+            const titleEl = document.getElementById('instruction-title');
+            const bodyEl = document.getElementById('instruction-body');
+            if (!overlay || !titleEl || !bodyEl) return;
+
+            let title = '';
+            let html = '';
+
+            if (tool === 'gen') {
+                title = 'Как пользоваться: Фото по промту';
+                html = `
+                    <div>Этот инструмент создаёт новое изображение по вашему описанию и при желании по прикреплённому фото.</div>
+                    <ul>
+                        <li>Впишите в поле, <b>что именно вы хотите увидеть на картинке</b>.</li>
+                        <li>При необходимости добавьте до 3 фото (загрузка или Ctrl+V) — они станут референсом.</li>
+                        <li>Нажмите «Сгенерировать» и дождитесь результата — файл придёт в чат с ботом.</li>
+                    </ul>
+                `;
+            } else if (tool === 'product') {
+                title = 'Как пользоваться: Фотосессия для маркетплейсов';
+                html = `
+                    <div>Инструмент делает серию продающих фото товара под маркетплейсы.</div>
+                    <ul>
+                        <li>Загрузите до 3 фото товара (желательно без лишнего фона и шума).</li>
+                        <li>Выберите сверху режим: <b>«Фотосессия»</b> или <b>«Инфографика»</b>.</li>
+                        <li>В фотосессии заполните поля <b>«Как показать товар?»</b> и <b>«Пожелания»</b>.</li>
+                        <li>В инфографике выберите, готово ли исходное фото, и заполните подсказки.</li>
+                        <li>Нажмите «Обработать» — 5 готовых фото придут вам в чат с ботом.</li>
+                    </ul>
+                `;
+            } else if (tool === 'ref') {
+                title = 'Как пользоваться: Фото по референсу';
+                html = `
+                    <div>Инструмент переносит стиль одного фото на другое или использует готовые шаблоны.</div>
+                    <ul>
+                        <li>В режиме <b>«Свой референс»</b> загрузите одно фото‑референс и до 3 основных фото.</li>
+                        <li>Опишите в поле, <b>что нужно получить по референсу</b> (стиль, ракурс, эмоции).</li>
+                        <li>В режиме <b>«Шаблон»</b> выберите шаблон из списка, затем загрузите своё фото.</li>
+                        <li>Нажмите «Сгенерировать» — результат придёт в чат с ботом.</li>
+                    </ul>
+                `;
+            } else if (tool === 'poses') {
+                title = 'Как пользоваться: Случайные позы';
+                html = `
+                    <div>Инструмент генерирует новые естественные позы для того же человека.</div>
+                    <ul>
+                        <li>Загрузите одно фото человека (лицо и фигура должны быть чётко видны).</li>
+                        <li>При желании укажите пожелания по стилю, эмоциям и ракурсу.</li>
+                        <li>Выберите количество поз (1–10).</li>
+                        <li>Нажмите «Сгенерировать позы» и дождитесь серии вариантов в чате.</li>
+                    </ul>
+                `;
+            } else {
+                return;
+            }
+
+            titleEl.textContent = title;
+            bodyEl.innerHTML = html;
+            overlay.classList.add('visible');
+        }
+
+        function closeInstruction() {
+            const overlay = document.getElementById('instruction-overlay');
+            if (!overlay) return;
+            overlay.classList.remove('visible');
+        }
+
+        function instructionOverlayBackgroundClick(event) {
+            if (!event || event.target !== event.currentTarget) return;
+            closeInstruction();
+        }
 
         function showErrorToast(message) {
             uiLog('uiError', { message });
